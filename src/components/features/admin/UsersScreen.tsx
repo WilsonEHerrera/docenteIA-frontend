@@ -5,8 +5,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { PlusIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
+import { SectionHeader } from "@/components/ui/PageHeader";
 import { Pager } from "@/components/ui/Pager";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -83,7 +85,7 @@ function UserForm({ user, saving, onCancel, onSubmit }: UserFormProps) {
         ))}
       </Select>
       {user && (
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-stone-700">
+        <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-stone-200 px-3 text-sm text-stone-800">
           <input
             type="checkbox"
             checked={isActive}
@@ -102,7 +104,7 @@ function UserForm({ user, saving, onCancel, onSubmit }: UserFormProps) {
         error={errors.password}
         hint={user ? "Cambiarla cierra las sesiones del usuario." : undefined}
       />
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-col-reverse gap-2 border-t border-border-soft pt-4 sm:flex-row sm:justify-end">
         <Button variant="secondary" onClick={onCancel} disabled={saving}>
           Cancelar
         </Button>
@@ -188,11 +190,17 @@ export function UsersScreen() {
     user.lockedUntil !== null && new Date(user.lockedUntil).getTime() > openedAt;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-bold tracking-tight text-stone-900">Usuarios</h2>
-        <Button onClick={() => setEditing("new")}>Nuevo usuario</Button>
-      </div>
+    <div className="space-y-5">
+      <SectionHeader
+        title="Usuarios"
+        description="Cuentas de la institución, sus roles y el estado de acceso."
+        actions={
+          <Button onClick={() => setEditing("new")}>
+            <PlusIcon />
+            Nuevo usuario
+          </Button>
+        }
+      />
 
       {users.error !== null ? (
         <ErrorState error={users.error} onRetry={users.reload} />
@@ -206,22 +214,24 @@ export function UsersScreen() {
         <EmptyState title="Sin usuarios" description="Crea el primer usuario de la institución." />
       ) : (
         <>
-          <Table>
+          <Table label="Usuarios" className="min-w-[60rem]">
             <THead>
               <TR>
-                <TH>Nombre</TH>
+                <TH sticky>Nombre</TH>
                 <TH>Correo</TH>
                 <TH>Rol</TH>
                 <TH>Estado</TH>
                 <TH>Último acceso</TH>
-                <TH>Acciones</TH>
+                <TH numeric>
+                  <span className="sr-only">Acciones</span>
+                </TH>
               </TR>
             </THead>
             <TBody>
               {users.data.data.map((user) => (
                 <TR key={user.id}>
-                  <TD className="font-medium text-stone-900">{user.fullName}</TD>
-                  <TD className="font-mono">{user.email}</TD>
+                  <TD sticky className="font-medium whitespace-nowrap text-stone-900">{user.fullName}</TD>
+                  <TD className="font-mono text-xs">{user.email}</TD>
                   <TD>{ROLE_LABELS[user.role]}</TD>
                   <TD>
                     {isLocked(user) ? (
@@ -232,25 +242,35 @@ export function UsersScreen() {
                       <Badge variant="neutral">Inactivo</Badge>
                     )}
                   </TD>
-                  <TD className="font-mono">{formatDateTime(user.lastLoginAt)}</TD>
+                  <TD className="font-mono text-xs whitespace-nowrap">{formatDateTime(user.lastLoginAt)}</TD>
                   <TD>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Button variant="secondary" onClick={() => setEditing(user)} disabled={busyId === user.id}>
+                    <div className="flex justify-end gap-1.5">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setEditing(user)}
+                        disabled={busyId === user.id}
+                        aria-label={`Editar a ${user.fullName}`}
+                      >
                         Editar
                       </Button>
                       {isLocked(user) && (
                         <Button
                           variant="secondary"
+                          size="sm"
                           onClick={() => void unlock(user)}
                           loading={busyId === user.id}
+                          aria-label={`Desbloquear a ${user.fullName}`}
                         >
                           Desbloquear
                         </Button>
                       )}
                       <Button
                         variant="destructive"
+                        size="sm"
                         onClick={() => void revokeSessions(user)}
                         disabled={busyId === user.id}
+                        aria-label={`Cerrar las sesiones de ${user.fullName}`}
                       >
                         Cerrar sesiones
                       </Button>

@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/Badge";
+import { AlertTriangleIcon } from "@/components/ui/icons";
 
 interface RiskChipProps {
   absences: number;
@@ -10,6 +11,7 @@ export function RiskChip({ absences, maxAbsences }: RiskChipProps) {
   const exceeded = absences > maxAbsences;
   return (
     <Badge variant={exceeded ? "danger" : "warning"}>
+      <AlertTriangleIcon />
       {exceeded ? "Límite superado" : "Cerca del límite"} · {absences}/{maxAbsences}
     </Badge>
   );

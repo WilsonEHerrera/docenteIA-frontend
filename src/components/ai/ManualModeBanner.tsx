@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { InfoIcon } from "@/components/ui/icons";
 
 interface ManualModeBannerProps {
   title?: string;
@@ -9,6 +9,7 @@ interface ManualModeBannerProps {
   loading?: boolean;
 }
 
+/** The AI is down or cannot be used: explain it and offer the manual path. */
 export function ManualModeBanner({
   title = "La IA no está disponible",
   children,
@@ -16,20 +17,18 @@ export function ManualModeBanner({
   loading,
 }: ManualModeBannerProps) {
   return (
-    <div
-      role="alert"
-      className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center"
+    <Alert
+      variant="warning"
+      title={title}
+      action={
+        onContinue && (
+          <Button variant="secondary" size="sm" onClick={onContinue} loading={loading}>
+            Continuar en modo manual
+          </Button>
+        )
+      }
     >
-      <InfoIcon className="shrink-0 text-amber-700" width={20} height={20} />
-      <div className="flex-1 space-y-0.5">
-        <p className="text-sm font-semibold text-amber-700">{title}</p>
-        <p className="text-xs leading-relaxed text-stone-700">{children}</p>
-      </div>
-      {onContinue && (
-        <Button variant="secondary" onClick={onContinue} loading={loading}>
-          Continuar en modo manual
-        </Button>
-      )}
-    </div>
+      {children}
+    </Alert>
   );
 }

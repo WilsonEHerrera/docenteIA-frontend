@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/Badge";
+import { AlertTriangleIcon } from "@/components/ui/icons";
 import type { AttendanceStatus } from "@/types/api";
 
 interface ConfidenceBadgeProps {
@@ -9,8 +10,20 @@ interface ConfidenceBadgeProps {
 
 /** Low confidence is "No reconocido", never "Ausente" (CLAUDE.md §4.4). */
 export function ConfidenceBadge({ status, confidence }: ConfidenceBadgeProps) {
-  if (status === "UNRECOGNIZED") return <Badge variant="warning">No reconocido</Badge>;
+  if (status === "UNRECOGNIZED") {
+    return (
+      <Badge variant="warning">
+        <AlertTriangleIcon />
+        No reconocido
+      </Badge>
+    );
+  }
   if (confidence === null) return null;
   const percent = Math.round(confidence <= 1 ? confidence * 100 : confidence);
-  return <Badge variant="neutral">{percent} %</Badge>;
+  return (
+    <Badge variant="neutral" title="Confianza del reconocimiento">
+      <span className="sr-only">Confianza del reconocimiento:</span>
+      {percent} %
+    </Badge>
+  );
 }

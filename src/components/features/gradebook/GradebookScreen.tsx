@@ -1,11 +1,22 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
+import { OriginTag } from "@/components/ai/OriginTag";
 import { RiskChip } from "@/components/ai/RiskChip";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import {
+  AlertTriangleIcon,
+  DownloadIcon,
+  FileCheckIcon,
+  GaugeIcon,
+  TableIcon,
+  UsersIcon,
+} from "@/components/ui/icons";
+import { StatTile } from "@/components/ui/StatTile";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/Table";
 import { Tabs } from "@/components/ui/Tabs";
@@ -55,16 +66,42 @@ export function GradebookScreen({ courseId }: { courseId: string }) {
     }
   }
 
+  const ready = book.data !== null && book.data.activities.length > 0 && book.data.rows.length > 0;
+
   const header = (
-    <div className="space-y-1">
-      <Link href="/notas" className="text-xs text-stone-600 underline underline-offset-2 hover:text-stone-900">
-        ← Notas
-      </Link>
-      <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-        Notas{course ? ` · ${course.name}` : ""}
-      </h1>
-      {course && <p className="text-sm text-stone-600">{course.subject.name}</p>}
-    </div>
+    <PageHeader
+      back={{ href: "/notas", label: "Notas" }}
+      title={course ? course.name : "Planilla de notas"}
+      description={course ? `${course.subject.name} · Periodo ${course.period}` : undefined}
+      actions={
+        ready && (
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={exporting === "pdf"}
+              disabled={exporting !== null}
+              onClick={() => void exportBook("pdf")}
+              aria-label="Exportar planilla en PDF"
+            >
+              {exporting !== "pdf" && <DownloadIcon />}
+              PDF
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={exporting === "xlsx"}
+              disabled={exporting !== null}
+              onClick={() => void exportBook("xlsx")}
+              aria-label="Exportar planilla en Excel"
+            >
+              {exporting !== "xlsx" && <DownloadIcon />}
+              Excel
+            </Button>
+          </>
+        )
+      }
+    />
   );
 
   if (book.error !== null) {
@@ -80,8 +117,8 @@ export function GradebookScreen({ courseId }: { courseId: string }) {
     return (
       <div role="status" aria-label="Cargando planilla" className="space-y-6">
         {header}
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-9 w-48 rounded-xl" />
+        <Skeleton className="h-72 w-full rounded-xl" />
       </div>
     );
   }
@@ -89,66 +126,79 @@ export function GradebookScreen({ courseId }: { courseId: string }) {
   const { activities, rows } = book.data;
   const weightSum = activities.reduce((sum, activity) => sum + Number(activity.weightPct), 0);
   const weightsOk = Math.abs(weightSum - 100) < 0.001;
+  const atRisk = rows.filter((row) => row.atRisk).length;
 
   return (
     <div className="space-y-6">
       {header}
 
-      {activities.length === 0 || rows.length === 0 ? (
+      {!ready ? (
         <EmptyState
+          icon={<TableIcon width={20} height={20} />}
           title="Sin notas todavía"
           description="Este curso aún no tiene actividades ni estudiantes con notas registradas."
         />
       ) : (
         <>
           {!weightsOk && (
-            <div
-              role="alert"
-              className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-stone-700"
-            >
-              Los porcentajes de las actividades suman{" "}
-              <span className="font-mono font-semibold">{weightSum} %</span>, no 100 %. El promedio puede no ser
-              confiable: ajusta los pesos de las actividades.
-            </div>
+            <Alert variant="warning" title="Los pesos no suman 100 %">
+              Las actividades suman <span className="font-mono font-semibold">{weightSum} %</span>. El promedio puede
+              no ser confiable: ajusta los pesos de las actividades.
+            </Alert>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Tabs
-              aria-label="Vista de notas"
-              value={view}
-              onChange={(value) => setView(value as View)}
-              items={[
-                { value: "table", label: "Planilla" },
-                { value: "charts", label: "Gráficas" },
-              ]}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+            <StatTile label="Estudiantes" icon={<UsersIcon />} value={rows.length} />
+            <StatTile label="Actividades" icon={<FileCheckIcon />} value={activities.length} />
+            <StatTile
+              label="En riesgo por fallas"
+              icon={<AlertTriangleIcon />}
+              value={atRisk}
+              tone={atRisk > 0 ? "warning" : "default"}
+              hint={course ? `Límite del curso: ${course.maxAbsences} fallas.` : undefined}
             />
-            <div className="flex gap-2">
-              <Button variant="secondary" loading={exporting === "pdf"} onClick={() => void exportBook("pdf")}>
-                Exportar PDF
-              </Button>
-              <Button variant="secondary" loading={exporting === "xlsx"} onClick={() => void exportBook("xlsx")}>
-                Exportar Excel
-              </Button>
-            </div>
+            <StatTile
+              label="Peso de las actividades"
+              icon={<GaugeIcon />}
+              value={`${weightSum} %`}
+              tone={weightsOk ? "default" : "warning"}
+              hint={weightsOk ? "Suma completa." : "Debe sumar 100 %."}
+            />
           </div>
+
+          <Tabs
+            aria-label="Vista de notas"
+            value={view}
+            onChange={(value) => setView(value as View)}
+            items={[
+              { value: "table", label: "Planilla" },
+              { value: "charts", label: "Gráficas" },
+            ]}
+          />
 
           {view === "charts" ? (
             <GradebookCharts rows={rows} />
           ) : (
-            <div>
-              <Table containerClassName="max-h-[70vh]">
+            <div className="space-y-2">
+              <Table label="Planilla de notas" containerClassName="max-h-[70vh]">
                 <THead>
                   <TR>
-                    <TH>Estudiante</TH>
+                    <TH sticky className="min-w-44">
+                      Estudiante
+                    </TH>
                     {activities.map((activity) => (
-                      <TH key={activity.id} numeric>
-                        {activity.name}
-                        <span className="block font-mono font-normal normal-case text-stone-500">
+                      <TH key={activity.id} numeric className="min-w-24">
+                        <span className="block max-w-40 truncate" title={activity.name}>
+                          {activity.name}
+                        </span>
+                        <span className="block font-mono font-normal text-stone-500 normal-case">
                           {activity.weightPct} %
                         </span>
                       </TH>
                     ))}
-                    <TH numeric>Promedio</TH>
+                    <TH numeric>
+                      Promedio
+                    </TH>
                     <TH numeric>Fallas</TH>
                     <TH>Riesgo</TH>
                   </TR>
@@ -156,25 +206,30 @@ export function GradebookScreen({ courseId }: { courseId: string }) {
                 <TBody>
                   {rows.map((row) => (
                     <TR key={row.studentId}>
-                      <TD className="font-medium text-stone-900">{row.studentName}</TD>
+                      <TD sticky className="font-medium whitespace-nowrap text-stone-900">
+                        {row.studentName}
+                      </TD>
                       {activities.map((activity) => (
                         <TD key={activity.id} numeric>
-                          {row.grades[activity.id] ?? "—"}
+                          {row.grades[activity.id] ?? <span className="text-stone-400">—</span>}
                         </TD>
                       ))}
                       <TD numeric className="font-semibold text-stone-900">
                         {row.average}
                       </TD>
                       <TD numeric>{row.absences}</TD>
-                      <TD>
+                      <TD className="whitespace-nowrap">
                         {row.atRisk && course ? (
                           <RiskChip absences={row.absences} maxAbsences={course.maxAbsences} />
-                        ) : null}
+                        ) : (
+                          <span className="text-stone-400">—</span>
+                        )}
                       </TD>
                     </TR>
                   ))}
                 </TBody>
               </Table>
+              <OriginTag origin="auto" label="Promedios, fallas y riesgo calculados por el sistema" />
             </div>
           )}
           {/* TODO(api): inline grade editing needs a grade id per cell (PUT /grades/:id); GradebookRow does not expose it. */}

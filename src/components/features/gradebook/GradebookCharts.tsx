@@ -1,4 +1,5 @@
-import { Card } from "@/components/ui/Card";
+import { OriginTag } from "@/components/ai/OriginTag";
+import { Card, CardHeader } from "@/components/ui/Card";
 import type { GradebookRow } from "@/types/api";
 
 // Pure-CSS charts: Recharts is not installed yet (docs/FRONTEND.md §10, Fase 4 lazy-loads it).
@@ -16,19 +17,25 @@ export function GradebookCharts({ rows }: { rows: GradebookRow[] }) {
   const maxCount = Math.max(1, ...buckets.map((bucket) => bucket.count));
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
       <Card>
-        <h2 className="text-base font-semibold text-stone-900">Promedio por estudiante</h2>
-        <ul className="space-y-3">
+        <CardHeader title="Promedio por estudiante" aside={<OriginTag origin="auto" />} />
+        <ul className="space-y-3.5">
           {values.map(({ row, value }) => (
-            <li key={row.studentId} className="space-y-1">
-              <div className="flex items-center justify-between gap-2 text-xs">
+            <li key={row.studentId} className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2 text-[13px]">
                 <span className="truncate text-stone-700">{row.studentName}</span>
-                <span className="font-mono font-semibold text-stone-900">{row.average}</span>
+                <span className={`font-mono font-semibold ${value < 3 ? "text-rose-700" : "text-stone-900"}`}>
+                  {row.average}
+                </span>
               </div>
-              <div className="h-2 rounded-full bg-stone-100" role="img" aria-label={`${row.studentName}: ${row.average} de 5`}>
+              <div
+                className="h-2 overflow-hidden rounded-full bg-stone-100"
+                role="img"
+                aria-label={`${row.studentName}: ${row.average} de 5${value < 3 ? ", por debajo de 3.0" : ""}`}
+              >
                 <div
-                  className={`h-2 rounded-full ${value < 3 ? "bg-rose-600" : "bg-stone-900"}`}
+                  className={`h-full rounded-full ${value < 3 ? "bg-rose-600" : "bg-stone-800"}`}
                   style={{ width: `${Math.min(100, (value / SCALE_MAX) * 100)}%` }}
                 />
               </div>
@@ -38,23 +45,26 @@ export function GradebookCharts({ rows }: { rows: GradebookRow[] }) {
       </Card>
 
       <Card>
-        <h2 className="text-base font-semibold text-stone-900">Distribución de promedios</h2>
-        <ul className="space-y-3">
+        <CardHeader title="Distribución de promedios" aside={<OriginTag origin="auto" />} />
+        <ul className="space-y-3.5">
           {buckets.map((bucket) => (
-            <li key={bucket.label} className="space-y-1">
-              <div className="flex items-center justify-between text-xs">
+            <li key={bucket.label} className="space-y-1.5">
+              <div className="flex items-center justify-between text-[13px]">
                 <span className="text-stone-700">{bucket.label}</span>
-                <span className="font-mono font-semibold text-stone-900">{bucket.count}</span>
+                <span className="font-mono font-semibold text-stone-900">
+                  {bucket.count} <span className="font-normal text-stone-500">est.</span>
+                </span>
               </div>
-              <div className="h-2 rounded-full bg-stone-100" aria-hidden="true">
+              <div className="h-2 overflow-hidden rounded-full bg-stone-100" aria-hidden="true">
                 <div
-                  className={`h-2 rounded-full ${bucket.danger ? "bg-rose-600" : "bg-stone-900"}`}
+                  className={`h-full rounded-full ${bucket.danger ? "bg-rose-600" : "bg-stone-800"}`}
                   style={{ width: `${(bucket.count / maxCount) * 100}%` }}
                 />
               </div>
             </li>
           ))}
         </ul>
+        <p className="text-xs text-stone-500">Escala de 0.0 a 5.0. En rojo, promedios por debajo de 3.0.</p>
       </Card>
     </div>
   );

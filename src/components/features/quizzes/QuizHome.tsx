@@ -4,12 +4,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { ManualModeBanner } from "@/components/ai/ManualModeBanner";
+import { AiBadge } from "@/components/ai/OriginTag";
+import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { FileChip, FileInput } from "@/components/ui/FileInput";
+import { CheckIcon, ChevronRightIcon, PencilLineIcon, QuizIcon, SparkIcon, UserCheckIcon } from "@/components/ui/icons";
+import { ProcessSteps } from "@/components/ui/ProcessSteps";
+import { StatTile } from "@/components/ui/StatTile";
 import { Input } from "@/components/ui/Input";
+import { PageHeader, SectionHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useApiQuery } from "@/hooks/useApiQuery";
@@ -69,99 +76,147 @@ export function QuizHome() {
     }
   }
 
+  const published = (quizzes.data ?? []).filter((quiz) => quiz.status === "PUBLISHED").length;
+  const drafts = (quizzes.data?.length ?? 0) - published;
   const courseName = (id: string) => courses.data?.data.find((course) => course.id === id)?.name ?? id;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-stone-900">Cuestionarios</h1>
-        <p className="text-sm text-stone-600 leading-relaxed">
-          Genera preguntas con IA a partir de un tema o un documento. Tú las revisas antes de publicarlas.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Cuestionarios"
+        description="Genera preguntas con IA a partir de un tema o un documento. Tú las revisas y editas antes de publicarlas."
+      />
 
-      <Card>
-        <h2 className="text-base font-semibold text-stone-900">Nuevo cuestionario</h2>
-        {aiDown && (
-          <ManualModeBanner>
-            No pudimos generar las preguntas ahora. Inténtalo de nuevo en unos minutos; tus datos no se
-            pierden.
-          </ManualModeBanner>
-        )}
-        <form onSubmit={generate} noValidate className="space-y-4">
-          <Select label="Curso" value={courseId} onChange={(event) => setCourseId(event.target.value)}>
-            <option value="">Selecciona un curso…</option>
-            {courses.data?.data.map((course) => (
-              <option key={course.id} value={course.id}>
-                {course.name} · {course.subject.name}
-              </option>
-            ))}
-          </Select>
-          <Input
-            label="Tema"
-            placeholder="Ej. Funciones cuadráticas"
-            value={topic}
-            onChange={(event) => setTopic(event.target.value)}
+      <div className="grid items-start gap-6 lg:grid-cols-12">
+        <Card className="lg:col-span-7">
+          <CardHeader
+            title="Nuevo cuestionario"
+            description="La IA prepara un borrador; no se publica nada hasta que lo apruebes."
           />
-          <div className="space-y-1.5">
-            <label htmlFor="quiz-file" className="block text-xs font-medium text-stone-700">
-              O un documento (opcional)
-            </label>
-            <input
-              id="quiz-file"
-              type="file"
+          {aiDown && (
+            <ManualModeBanner>
+              No pudimos generar las preguntas ahora. Inténtalo de nuevo en unos minutos; tus datos no se pierden.
+            </ManualModeBanner>
+          )}
+          <form onSubmit={generate} noValidate className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Select label="Curso" value={courseId} onChange={(event) => setCourseId(event.target.value)}>
+                <option value="">{courses.loading ? "Cargando cursos…" : "Selecciona un curso…"}</option>
+                {courses.data?.data.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name} · {course.subject.name}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                label="Tema"
+                placeholder="Ej. Funciones cuadráticas"
+                value={topic}
+                onChange={(event) => setTopic(event.target.value)}
+              />
+            </div>
+            <FileInput
+              label="O un documento de referencia (opcional)"
+              hint="PDF, DOC, DOCX o TXT; máximo 10 MB."
               accept=".pdf,.doc,.docx,.txt"
               onChange={onFile}
-              className="block w-full cursor-pointer text-xs text-stone-700 file:mr-3 file:cursor-pointer file:rounded-lg file:border file:border-stone-200 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-medium"
-            />
-            {file && <p className="font-mono text-[11px] text-stone-500">{file.name}</p>}
-          </div>
-          {formError && (
-            <p role="alert" className="text-xs text-rose-700">
-              {formError}
-            </p>
-          )}
-          <Button type="submit" loading={generating}>
-            {generating ? "Generando preguntas…" : "Generar con IA"}
-          </Button>
-        </form>
-      </Card>
+            >
+              {file && <FileChip name={file.name} onRemove={() => setFile(null)} />}
+            </FileInput>
+            {formError && <Alert variant="danger">{formError}</Alert>}
+            <div className="flex justify-end border-t border-border-soft pt-5">
+              <Button type="submit" loading={generating} className="w-full sm:w-auto">
+                {!generating && <SparkIcon />}
+                {generating ? "Generando preguntas…" : "Generar borrador con IA"}
+              </Button>
+            </div>
+          </form>
+        </Card>
 
-      <section className="space-y-3" aria-label="Cuestionarios existentes">
-        <h2 className="text-xl font-bold tracking-tight text-stone-900">Tus cuestionarios</h2>
-        {quizzes.error !== null ? (
-          <ErrorState error={quizzes.error} onRetry={quizzes.reload} />
-        ) : quizzes.loading || !quizzes.data ? (
-          <div role="status" aria-label="Cargando cuestionarios" className="space-y-3">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
+        <div className="space-y-6 lg:col-span-5">
+          <div className="grid grid-cols-2 gap-3">
+            <StatTile
+              label="Borradores"
+              icon={<SparkIcon />}
+              value={quizzes.data ? drafts : null}
+              hint="Esperan tu aprobación."
+            />
+            <StatTile
+              label="Publicados"
+              icon={<CheckIcon />}
+              value={quizzes.data ? published : null}
+              hint="Visibles para tus estudiantes."
+            />
           </div>
-        ) : quizzes.data.length === 0 ? (
-          <EmptyState title="Aún no tienes cuestionarios" description="Genera el primero con un tema o un documento." />
-        ) : (
-          <ul className="space-y-3">
-            {quizzes.data.map((quiz) => (
-              <li key={quiz.id}>
-                <Link href={`/cuestionarios/${quiz.id}`} className="block">
-                  <Card className="flex items-center justify-between gap-3 p-4 transition-colors hover:bg-stone-50">
-                    <span>
-                      <span className="block text-sm font-semibold text-stone-900">{quiz.title}</span>
-                      <span className="block text-xs text-stone-600">
-                        {courseName(quiz.courseId)} · {quiz.questions.length} preguntas
+          <section className="space-y-4" aria-labelledby="quizzes-heading">
+            <SectionHeader id="quizzes-heading" title="Tus cuestionarios" />
+            {quizzes.error !== null ? (
+              <ErrorState error={quizzes.error} onRetry={quizzes.reload} />
+            ) : quizzes.loading || !quizzes.data ? (
+              <div role="status" aria-label="Cargando cuestionarios" className="space-y-2">
+                <Skeleton className="h-16 w-full rounded-xl" />
+                <Skeleton className="h-16 w-full rounded-xl" />
+              </div>
+            ) : quizzes.data.length === 0 ? (
+              <EmptyState
+                icon={<QuizIcon width={20} height={20} />}
+                title="Aún no tienes cuestionarios"
+                description="Genera el primero con un tema o un documento."
+              />
+            ) : (
+              <ul className="divide-y divide-border-soft overflow-hidden rounded-2xl border border-border-soft bg-white shadow-xs">
+                {quizzes.data.map((quiz) => (
+                  <li key={quiz.id}>
+                    <Link
+                      href={`/cuestionarios/${quiz.id}`}
+                      className="group flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3.5 transition-colors hover:bg-stone-50 sm:flex-nowrap sm:px-5"
+                    >
+                      <span className="min-w-0 flex-1 basis-full sm:basis-auto">
+                        <span className="block truncate text-sm font-semibold text-stone-900">{quiz.title}</span>
+                        <span className="block truncate text-xs text-stone-600">
+                          {courseName(quiz.courseId)} · <span className="font-mono">{quiz.questions.length}</span> preguntas
+                        </span>
                       </span>
-                    </span>
-                    {quiz.status === "PUBLISHED" ? (
-                      <Badge variant="success">Publicado</Badge>
-                    ) : (
-                      <Badge variant="info">Sugerido por IA</Badge>
-                    )}
-                  </Card>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                      {quiz.status === "PUBLISHED" ? (
+                        <Badge variant="success">
+                          <CheckIcon />
+                          Publicado
+                        </Badge>
+                      ) : (
+                        <AiBadge />
+                      )}
+                      <ChevronRightIcon className="ml-auto shrink-0 text-stone-400 transition-transform group-hover:translate-x-0.5 sm:ml-0" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <ProcessSteps
+            title="Antes de que un estudiante vea una pregunta"
+            steps={[
+              {
+                icon: SparkIcon,
+                actor: "IA",
+                title: "Genera un borrador",
+                text: "A partir del tema o del documento que elijas.",
+              },
+              {
+                icon: PencilLineIcon,
+                actor: "Tú",
+                title: "Revisas cada pregunta",
+                text: "Editas el enunciado, eliges la respuesta correcta, regeneras o eliminas.",
+              },
+              {
+                icon: UserCheckIcon,
+                actor: "Tú",
+                title: "Apruebas y publicas",
+                text: "Solo entonces el cuestionario queda disponible para el curso.",
+              },
+            ]}
+          />
+        </div>
+      </div>
     </div>
   );
 }

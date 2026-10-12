@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { SectionHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
@@ -121,7 +122,7 @@ function CourseForm({
     <form onSubmit={submit} noValidate className="space-y-3">
       <Input label="Nombre del curso" value={name} onChange={(e) => setName(e.target.value)} error={errors.name} />
       <Input label="Periodo" className="font-mono" value={period} onChange={(e) => setPeriod(e.target.value)} error={errors.period} />
-      <Select label="Materia" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+      <Select label="Materia" value={subjectId} onChange={(e) => setSubjectId(e.target.value)} error={errors.subjectId}>
         <option value="">Selecciona…</option>
         {subjects.map((subject) => (
           <option key={subject.id} value={subject.id}>
@@ -129,8 +130,7 @@ function CourseForm({
           </option>
         ))}
       </Select>
-      {errors.subjectId && <p role="alert" className="text-[11px] text-rose-700">{errors.subjectId}</p>}
-      <Select label="Docente" value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
+      <Select label="Docente" value={teacherId} onChange={(e) => setTeacherId(e.target.value)} error={errors.teacherId}>
         <option value="">Selecciona…</option>
         {teachers.map((teacher) => (
           <option key={teacher.id} value={teacher.id}>
@@ -138,7 +138,6 @@ function CourseForm({
           </option>
         ))}
       </Select>
-      {errors.teacherId && <p role="alert" className="text-[11px] text-rose-700">{errors.teacherId}</p>}
       <Input
         label="Límite de fallas (opcional)"
         inputMode="numeric"
@@ -164,7 +163,7 @@ export function CoursesAdmin() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-bold tracking-tight text-stone-900">Cursos</h2>
+      <SectionHeader title="Cursos" description="Cursos del periodo con su docente, materia y límite de fallas." />
 
       {courses.error !== null ? (
         <ErrorState error={courses.error} onRetry={courses.reload} />
@@ -177,7 +176,7 @@ export function CoursesAdmin() {
         <EmptyState title="Sin cursos" description="Crea el primer curso con el formulario de abajo." />
       ) : (
         <>
-          <Table>
+          <Table label="Cursos" className="min-w-[44rem]">
             <THead>
               <TR>
                 <TH>Curso</TH>
@@ -191,10 +190,10 @@ export function CoursesAdmin() {
             <TBody>
               {courses.data.data.map((course) => (
                 <TR key={course.id}>
-                  <TD className="font-medium text-stone-900">
+                  <TD className="font-medium whitespace-nowrap text-stone-900">
                     <Link
                       href={`/admin/cursos/${course.id}`}
-                      className="underline underline-offset-2 hover:text-stone-600"
+                      className="underline decoration-stone-300 underline-offset-4 transition-colors hover:decoration-stone-900"
                     >
                       {course.name}
                     </Link>
@@ -214,15 +213,16 @@ export function CoursesAdmin() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <h3 className="text-base font-semibold text-stone-900">Nuevo curso</h3>
+          <CardHeader as="h3" title="Nuevo curso" />
           {subjects.error !== null ? (
             <ErrorState error={subjects.error} onRetry={subjects.reload} />
           ) : subjects.loading || !subjects.data || users.loading ? (
-            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-64 w-full rounded-xl" />
           ) : subjects.data.length === 0 ? (
-            <EmptyState title="Primero crea una materia" description="Un curso necesita una materia." />
+            <EmptyState inset title="Primero crea una materia" description="Un curso necesita una materia." />
           ) : teachers.length === 0 ? (
             <EmptyState
+              inset
               title="No hay docentes activos"
               description="Crea un usuario con rol Docente en la sección Usuarios."
             />
@@ -232,13 +232,13 @@ export function CoursesAdmin() {
         </Card>
 
         <Card>
-          <h3 className="text-base font-semibold text-stone-900">Materias</h3>
+          <CardHeader as="h3" title="Materias" description="Crea las materias antes de asignarlas a un curso." />
           {subjects.data && subjects.data.length > 0 && (
             <ul className="flex flex-wrap gap-2" aria-label="Materias existentes">
               {subjects.data.map((subject) => (
                 <li
                   key={subject.id}
-                  className="rounded-lg border border-border-soft bg-stone-50 px-2.5 py-1 text-xs text-stone-700"
+                  className="rounded-lg border border-border-soft bg-stone-50 px-2.5 py-1 text-[13px] text-stone-700"
                 >
                   {subject.name} <span className="font-mono text-stone-500">{subject.code}</span>
                 </li>

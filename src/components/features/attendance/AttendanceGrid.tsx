@@ -1,6 +1,7 @@
 "use client";
 
 import { ConfidenceBadge } from "@/components/ai/ConfidenceBadge";
+import { CheckIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/auth/roles";
 import type { AttendanceRecord, AttendanceStatus } from "@/types/api";
@@ -12,9 +13,9 @@ interface AttendanceGridProps {
   onMark: (recordId: string, status: AttendanceStatus) => void;
 }
 
-const OPTIONS: Array<{ status: AttendanceStatus; label: string }> = [
-  { status: "PRESENT", label: "Presente" },
-  { status: "ABSENT", label: "Ausente" },
+const OPTIONS: Array<{ status: AttendanceStatus; label: string; selected: string }> = [
+  { status: "PRESENT", label: "Presente", selected: "border-emerald-300 bg-emerald-50 text-emerald-800" },
+  { status: "ABSENT", label: "Ausente", selected: "border-rose-300 bg-rose-50 text-rose-800" },
 ];
 
 export function AttendanceGrid({ records, readOnly, busyIds, onMark }: AttendanceGridProps) {
@@ -27,29 +28,40 @@ export function AttendanceGrid({ records, readOnly, busyIds, onMark }: Attendanc
           <li
             key={record.id}
             className={cn(
-              "space-y-3 rounded-xl border bg-white p-3",
-              unrecognized ? "border-amber-200 bg-amber-50" : "border-border-soft",
+              "flex flex-col gap-3 rounded-2xl border p-3 shadow-xs transition-colors sm:p-4",
+              unrecognized ? "border-amber-300 bg-amber-50/70" : "border-border-soft bg-white",
             )}
           >
             <div className="flex items-center gap-3">
               <span
                 aria-hidden="true"
-                className="flex size-9 shrink-0 items-center justify-center rounded-full bg-stone-200 text-xs font-semibold text-stone-700"
+                className={cn(
+                  "flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                  unrecognized ? "bg-amber-100 text-amber-800" : "bg-stone-100 text-stone-700",
+                )}
               >
                 {initials(record.studentName)}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-stone-900">{record.studentName}</p>
-                <p className="font-mono text-[11px] text-stone-500">{record.studentId}</p>
+                <p className="truncate font-mono text-[11px] text-stone-500">{record.studentId}</p>
               </div>
-              {record.status === "PRESENT" && record.source === "MANUAL" ? (
-                <span className="font-mono text-[11px] uppercase text-stone-500">Manual</span>
+              {record.source === "MANUAL" && record.status !== "UNRECOGNIZED" ? (
+                <span className="font-mono text-[10px] font-medium tracking-wide text-stone-500 uppercase" title="Marcado por ti">
+                  Manual
+                </span>
               ) : (
                 <ConfidenceBadge status={record.status} confidence={record.confidence} />
               )}
             </div>
 
-            <div role="group" aria-label={`Asistencia de ${record.studentName}`} className="flex gap-2">
+            {unrecognized && !readOnly && (
+              <p className="text-xs leading-relaxed text-amber-900">
+                La IA no pudo identificarlo en la foto. Indica si está presente o ausente.
+              </p>
+            )}
+
+            <div role="group" aria-label={`Asistencia de ${record.studentName}`} className="mt-auto grid grid-cols-2 gap-2">
               {OPTIONS.map((option) => {
                 const selected = record.status === option.status;
                 return (
@@ -60,15 +72,14 @@ export function AttendanceGrid({ records, readOnly, busyIds, onMark }: Attendanc
                     disabled={readOnly || busy}
                     onClick={() => onMark(record.id, option.status)}
                     className={cn(
-                      "flex-1 cursor-pointer rounded-lg px-3 py-2 text-xs font-medium transition-colors",
-                      "disabled:cursor-not-allowed disabled:opacity-60",
+                      "inline-flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border text-[13px] font-medium transition-colors sm:h-10",
+                      "disabled:cursor-not-allowed",
                       selected
-                        ? option.status === "PRESENT"
-                          ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border border-rose-200 bg-rose-50 text-rose-700"
-                        : "border border-stone-200 bg-white text-stone-700 hover:bg-stone-50",
+                        ? option.selected
+                        : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50 disabled:opacity-50",
                     )}
                   >
+                    {selected && <CheckIcon width={16} height={16} />}
                     {option.label}
                   </button>
                 );

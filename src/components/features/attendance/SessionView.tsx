@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { ManualModeBanner } from "@/components/ai/ManualModeBanner";
+import { AiBadge, OriginTag } from "@/components/ai/OriginTag";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { AlertTriangleIcon, CheckCircleIcon, CheckIcon } from "@/components/ui/icons";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/Toast";
 import { useApiQuery } from "@/hooks/useApiQuery";
@@ -47,8 +50,8 @@ export function SessionView({ sessionId }: { sessionId: string }) {
 
   if (session.error !== null) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4">
-        <h1 className="text-2xl font-bold tracking-tight text-stone-900">Asistencia</h1>
+      <div className="space-y-6">
+        <PageHeader title="Asistencia" back={{ href: "/asistencia", label: "Asistencia" }} />
         <ErrorState error={session.error} onRetry={session.reload} />
       </div>
     );
@@ -56,10 +59,15 @@ export function SessionView({ sessionId }: { sessionId: string }) {
 
   if (session.loading || !session.data) {
     return (
-      <div role="status" aria-label="Cargando asistencia" className="mx-auto max-w-3xl space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-48 w-full" />
+      <div role="status" aria-label="Cargando asistencia" className="space-y-6">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-20 w-full rounded-2xl" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton className="h-32 rounded-2xl" />
+          <Skeleton className="h-32 rounded-2xl" />
+          <Skeleton className="h-32 rounded-2xl" />
+        </div>
       </div>
     );
   }
@@ -116,35 +124,51 @@ export function SessionView({ sessionId }: { sessionId: string }) {
     }
   }
 
+  const stats = [
+    { label: "Presentes", value: present, tone: "text-stone-900" },
+    { label: "Ausentes", value: absent, tone: "text-stone-900" },
+    { label: "Sin definir", value: unresolved, tone: unresolved > 0 ? "text-amber-700" : "text-stone-900" },
+  ];
+
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-            Asistencia{course ? ` · ${course.name}` : ""}
-          </h1>
-          <p className="font-mono text-[11px] text-stone-500">{data.id}</p>
-        </div>
-        {confirmed ? (
-          <Badge variant="success">Confirmada</Badge>
-        ) : data.status === "PROCESSING" ? (
-          <Badge variant="info">Procesando</Badge>
-        ) : data.status === "MANUAL_REQUIRED" ? (
-          <Badge variant="warning">Modo manual</Badge>
-        ) : (
-          <Badge variant="info">Sugerido por IA</Badge>
-        )}
-      </div>
+    <div className={confirmed ? "space-y-6" : "space-y-6 pb-4"}>
+      <PageHeader
+        back={{ href: "/asistencia", label: "Asistencia" }}
+        title={course ? course.name : "Asistencia"}
+        meta={data.id}
+        status={
+          confirmed ? (
+            <Badge variant="success">
+              <CheckIcon />
+              Confirmada
+            </Badge>
+          ) : data.status === "PROCESSING" ? (
+            <Badge variant="info">Procesando</Badge>
+          ) : data.status === "MANUAL_REQUIRED" ? (
+            <Badge variant="warning">Modo manual</Badge>
+          ) : (
+            <AiBadge />
+          )
+        }
+      />
 
       {data.status === "PROCESSING" ? (
         <Card>
-          <div role="status" className="space-y-3">
-            <p className="text-sm font-semibold text-stone-900">Procesando la foto…</p>
-            <p className="text-sm text-stone-600 leading-relaxed">
-              Estamos reconociendo a los estudiantes. Esto toma unos segundos; no cierres esta pantalla.
-            </p>
-            <Skeleton className="h-3 w-2/3" />
-            <Skeleton className="h-3 w-1/2" />
+          <div role="status" className="flex items-start gap-4">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 size-5 shrink-0 animate-spin rounded-full border-2 border-stone-300 border-t-stone-900"
+            />
+            <div className="flex-1 space-y-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-stone-900">Procesando la foto…</p>
+                <p className="text-[13px] leading-relaxed text-stone-600">
+                  Estamos reconociendo a los estudiantes. Esto toma unos segundos; no cierres esta pantalla.
+                </p>
+              </div>
+              <Skeleton className="h-2.5 w-2/3" />
+              <Skeleton className="h-2.5 w-1/2" />
+            </div>
           </div>
         </Card>
       ) : (
@@ -155,47 +179,64 @@ export function SessionView({ sessionId }: { sessionId: string }) {
             </ManualModeBanner>
           )}
 
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <Card className="p-4">
-              <p className="font-mono text-2xl font-semibold text-stone-900">{present}</p>
-              <p className="text-xs text-stone-600">Presentes</p>
-            </Card>
-            <Card className="p-4">
-              <p className="font-mono text-2xl font-semibold text-stone-900">{absent}</p>
-              <p className="text-xs text-stone-600">Ausentes</p>
-            </Card>
-            <Card className="p-4">
-              <p className="font-mono text-2xl font-semibold text-amber-700">{unresolved}</p>
-              <p className="text-xs text-stone-600">Sin definir</p>
-            </Card>
-          </div>
+          <Card padding="none" spacing="none">
+            <dl className="grid grid-cols-3 divide-x divide-border-soft">
+              {stats.map((stat) => (
+                <div key={stat.label} className="px-3 py-4 text-center sm:px-6 sm:text-left">
+                  <dt className="text-xs text-stone-600">{stat.label}</dt>
+                  <dd className={`font-mono text-2xl font-semibold tabular-nums ${stat.tone}`}>{stat.value}</dd>
+                </div>
+              ))}
+            </dl>
+            {!confirmed && data.status === "READY" && (
+              <div className="border-t border-border-soft px-4 py-3 sm:px-6">
+                <OriginTag
+                  origin="ai"
+                  label="Propuesta de la IA a partir de la foto. Revisa a cada estudiante antes de confirmar."
+                  className="whitespace-normal"
+                />
+              </div>
+            )}
+          </Card>
 
           {data.records.length === 0 ? (
             <ErrorState error={new Error("La sesión no tiene estudiantes. Revisa la matrícula del curso.")} />
           ) : (
-            <AttendanceGrid
-              records={data.records}
-              readOnly={confirmed}
-              busyIds={busyIds}
-              onMark={mark}
-            />
+            <AttendanceGrid records={data.records} readOnly={confirmed} busyIds={busyIds} onMark={mark} />
           )}
 
           {confirmed ? (
-            <Link
-              href="/asistencia"
-              className="inline-block text-xs font-medium text-stone-700 underline underline-offset-2 hover:text-stone-900"
-            >
-              Tomar otra asistencia
-            </Link>
-          ) : (
-            <div className="sticky bottom-0 -mx-4 flex flex-col gap-2 border-t border-border-soft bg-dashboard px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-stone-600" role="status">
-                {unresolved > 0
-                  ? `Faltan ${unresolved} por definir. Los no reconocidos no se marcan ausentes solos: decide tú.`
-                  : "Todo definido. Puedes confirmar la asistencia."}
+            <div className="flex flex-col items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="flex items-center gap-2 text-[13px] text-emerald-900" role="status">
+                <CheckCircleIcon className="shrink-0 text-emerald-700" />
+                Asistencia confirmada y registrada.
               </p>
-              <Button onClick={confirm} loading={confirming} disabled={unresolved > 0}>
+              <Link
+                href="/asistencia"
+                className="inline-flex h-10 items-center rounded-lg border border-stone-200 bg-white px-4 text-sm font-medium text-stone-800 shadow-xs transition-colors hover:bg-stone-50"
+              >
+                Tomar otra asistencia
+              </Link>
+            </div>
+          ) : (
+            <div className="sticky bottom-3 z-20 flex flex-col gap-3 rounded-2xl border border-border-soft bg-white/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-white/85 sm:bottom-4 sm:flex-row sm:items-center sm:justify-between sm:pl-5">
+              <p className="flex items-start gap-2 text-[13px] leading-relaxed text-stone-700" role="status">
+                {unresolved > 0 ? (
+                  <>
+                    <AlertTriangleIcon className="mt-px shrink-0 text-amber-700" />
+                    <span>
+                      Faltan <span className="font-mono font-semibold">{unresolved}</span> por definir. Los no
+                      reconocidos no se marcan ausentes solos: decide tú.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircleIcon className="mt-px shrink-0 text-emerald-700" />
+                    Todo definido. Puedes confirmar la asistencia.
+                  </>
+                )}
+              </p>
+              <Button onClick={confirm} loading={confirming} disabled={unresolved > 0} className="w-full sm:w-auto">
                 Confirmar asistencia
               </Button>
             </div>

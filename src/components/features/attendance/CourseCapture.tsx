@@ -1,18 +1,22 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type ReactNode } from "react";
 import { ManualModeBanner } from "@/components/ai/ManualModeBanner";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { CameraIcon } from "@/components/ui/icons";
+import { FieldMessage } from "@/components/ui/Field";
+import { CameraIcon, GaugeIcon, SparkIcon, UploadIcon, UserCheckIcon } from "@/components/ui/icons";
+import { ProcessSteps } from "@/components/ui/ProcessSteps";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { apiFetch } from "@/lib/api/client";
 import { ApiError, errorMessage, isServiceUnavailable } from "@/lib/api/errors";
+import { cn } from "@/lib/cn";
 import type { AttendanceSession, Course, Paginated } from "@/types/api";
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -23,6 +27,23 @@ type Problem =
   | { kind: "service-down" }
   | { kind: "no-consent"; message: string }
   | { kind: "error"; message: string };
+
+const pickerClass =
+  "flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-stone-900 sm:h-11";
+
+function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <p className="flex items-center gap-2 text-[13px] font-semibold text-stone-900">
+        <span className="flex size-5 items-center justify-center rounded-full bg-stone-900 font-mono text-[10px] text-white">
+          {n}
+        </span>
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
 
 export function CourseCapture() {
   const router = useRouter();
@@ -96,105 +117,138 @@ export function CourseCapture() {
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-stone-900">Asistencia</h1>
-        <p className="text-sm text-stone-600 leading-relaxed">
-          Elige el curso y toma una foto del grupo. La IA propone quién está presente y tú confirmas.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Asistencia"
+        description="Elige el curso y toma una foto del grupo. La IA propone quién está presente; tú revisas y confirmas."
+      />
 
       {courses.error !== null ? (
         <ErrorState error={courses.error} onRetry={courses.reload} />
       ) : courses.loading || !courses.data ? (
-        <div role="status" aria-label="Cargando cursos" className="space-y-3">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-40 w-full" />
+        <div role="status" aria-label="Cargando cursos" className="grid gap-4 lg:grid-cols-2">
+          <Skeleton className="h-64 rounded-2xl" />
+          <Skeleton className="hidden aspect-[4/3] rounded-2xl lg:block" />
         </div>
       ) : courses.data.data.length === 0 ? (
         <EmptyState title="Sin cursos" description="Aún no tienes cursos asignados. Contacta al administrador." />
       ) : (
-        <Card>
-          <Select
-            label="Curso"
-            value={courseId}
-            onChange={(event) => {
-              setCourseId(event.target.value);
-              setProblem(null);
-            }}
-          >
-            <option value="">Selecciona un curso…</option>
-            {courses.data.data.map((course) => (
-              <option key={course.id} value={course.id}>
-                {course.name} · {course.subject.name}
-              </option>
-            ))}
-          </Select>
+        <>
+          <Card>
+            {/* Phones: course, preview, controls. Desktop: steps on the left, preview spanning the right column. */}
+            <div className="grid gap-6 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:gap-x-8">
+              <Step n={1} title="Curso">
+                <Select
+                  aria-label="Curso"
+                  value={courseId}
+                  onChange={(event) => {
+                    setCourseId(event.target.value);
+                    setProblem(null);
+                  }}
+                >
+                  <option value="">Selecciona un curso…</option>
+                  {courses.data.data.map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.name} · {course.subject.name}
+                    </option>
+                  ))}
+                </Select>
+              </Step>
 
-          <div className="space-y-3">
-            <p className="text-xs font-medium text-stone-700">Foto del grupo</p>
-            {preview ? (
-              // eslint-disable-next-line @next/next/no-img-element -- local blob preview, not optimizable
-              <img
-                src={preview}
-                alt="Vista previa de la foto del grupo"
-                className="max-h-72 w-full rounded-xl border border-border-soft object-contain"
-              />
-            ) : (
-              <p className="rounded-xl border border-dashed border-stone-300 p-6 text-center text-xs text-stone-600">
-                Aún no has agregado una foto.
-              </p>
-            )}
+              <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:min-h-72">
+                {preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- local blob preview, not optimizable
+                  <img
+                    src={preview}
+                    alt="Vista previa de la foto del grupo"
+                    className="aspect-[4/3] w-full rounded-xl border border-border-soft bg-stone-100 object-contain lg:aspect-auto lg:h-full"
+                  />
+                ) : (
+                  <div className="flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-stone-300 bg-stone-50 px-6 text-center lg:aspect-auto lg:h-full">
+                    <CameraIcon width={24} height={24} className="text-stone-400" />
+                    <p className="text-[13px] text-stone-600">Aún no has agregado una foto.</p>
+                    <p className="text-xs text-stone-500">Procura que se vean los rostros con buena luz.</p>
+                  </div>
+                )}
+              </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <label className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg bg-stone-900 px-4 py-3 text-xs font-medium text-white transition-colors hover:bg-stone-800 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-stone-900">
-                <CameraIcon />
-                {photo ? "Tomar otra foto" : "Tomar foto"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="sr-only"
-                  onChange={onPhoto}
-                />
-              </label>
-              <label className="flex flex-1 cursor-pointer items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-3 text-xs font-medium text-stone-700 transition-colors hover:bg-stone-50 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-stone-900">
-                Subir desde galería
-                <input type="file" accept="image/*" className="sr-only" onChange={onPhoto} />
-              </label>
+              <div className="space-y-6">
+                <Step n={2} title="Foto del grupo">
+                  <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
+                    <label className={cn(pickerClass, "bg-stone-900 text-white shadow-xs hover:bg-stone-800")}>
+                      <CameraIcon width={18} height={18} />
+                      {photo ? "Tomar otra foto" : "Tomar foto"}
+                      <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={onPhoto} />
+                    </label>
+                    <label
+                      className={cn(pickerClass, "border border-stone-200 bg-white text-stone-800 shadow-xs hover:bg-stone-50")}
+                    >
+                      <UploadIcon width={18} height={18} />
+                      Subir desde galería
+                      <input type="file" accept="image/*" className="sr-only" onChange={onPhoto} />
+                    </label>
+                  </div>
+                  <FieldMessage
+                    id="attendance-photo"
+                    error={photoError ?? undefined}
+                    hint={photo ? photo.name : "JPG, PNG o HEIC; máximo 10 MB."}
+                  />
+                </Step>
+
+                {problem?.kind === "service-down" && (
+                  <ManualModeBanner onContinue={continueManual} loading={manualLoading}>
+                    No pudimos procesar la foto ahora. Puedes marcar la asistencia a mano sin perder tu avance.
+                  </ManualModeBanner>
+                )}
+                {problem?.kind === "no-consent" && (
+                  <ManualModeBanner title="Hay estudiantes sin consentimiento" onContinue={continueManual} loading={manualLoading}>
+                    {problem.message}
+                  </ManualModeBanner>
+                )}
+                {problem?.kind === "error" && <ErrorState error={new Error(problem.message)} />}
+
+                <div className="space-y-2 border-t border-border-soft pt-5">
+                  <Button onClick={submitPhoto} loading={submitting} disabled={!courseId || !photo} className="w-full">
+                    {submitting ? "Enviando foto…" : "Enviar foto y proponer asistencia"}
+                  </Button>
+                  <p className="text-center text-xs text-stone-500">
+                    Nada se guarda hasta que confirmes la asistencia en el siguiente paso.
+                  </p>
+                </div>
+              </div>
             </div>
-            {photoError && (
-              <p role="alert" className="text-[11px] text-rose-700">
-                {photoError}
-              </p>
-            )}
-          </div>
-
-          {problem?.kind === "service-down" && (
-            <ManualModeBanner onContinue={continueManual} loading={manualLoading}>
-              No pudimos procesar la foto ahora. Puedes marcar la asistencia a mano sin perder tu avance.
-            </ManualModeBanner>
-          )}
-          {problem?.kind === "no-consent" && (
-            <ManualModeBanner
-              title="Hay estudiantes sin consentimiento"
-              onContinue={continueManual}
-              loading={manualLoading}
-            >
-              {problem.message}
-            </ManualModeBanner>
-          )}
-          {problem?.kind === "error" && <ErrorState error={new Error(problem.message)} />}
-
-          <Button
-            onClick={submitPhoto}
-            loading={submitting}
-            disabled={!courseId || !photo}
-            className="w-full py-3"
-          >
-            Enviar foto y proponer asistencia
-          </Button>
-        </Card>
+          </Card>
+          <ProcessSteps
+            layout="row"
+            title="Cómo se registra la asistencia"
+            steps={[
+              {
+                icon: CameraIcon,
+                actor: "Tú",
+                title: "Tomas la foto",
+                text: "Una sola foto del grupo, con los rostros visibles y buena luz.",
+              },
+              {
+                icon: SparkIcon,
+                actor: "IA",
+                title: "La IA propone",
+                text: "Marca como presentes a quienes reconoce. Si no identifica a alguien, queda «No reconocido», nunca ausente.",
+              },
+              {
+                icon: UserCheckIcon,
+                actor: "Tú",
+                title: "Revisas y confirmas",
+                text: "Defines a los no reconocidos y corriges lo que haga falta. Nada se guarda antes de tu confirmación.",
+              },
+              {
+                icon: GaugeIcon,
+                actor: "Sistema",
+                title: "Se actualizan las fallas",
+                text: "Con la asistencia confirmada, el sistema actualiza las fallas y las alertas del curso.",
+              },
+            ]}
+          />
+        </>
       )}
     </div>
   );

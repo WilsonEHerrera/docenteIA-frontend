@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { cn } from "@/lib/cn";
-import { CloseIcon } from "./icons";
+import { AlertCircleIcon, AlertTriangleIcon, CheckCircleIcon, CloseIcon, InfoIcon } from "./icons";
 
 type ToastVariant = "success" | "danger" | "warning" | "info";
 
@@ -26,12 +26,12 @@ interface ToastApi {
 
 const ToastContext = createContext<ToastApi | null>(null);
 
-const styles: Record<ToastVariant, string> = {
-  success: "bg-emerald-50 border-emerald-200 text-emerald-700",
-  danger: "bg-rose-50 border-rose-200 text-rose-700",
-  warning: "bg-amber-50 border-amber-200 text-amber-700",
-  info: "bg-white border-stone-200 text-stone-700",
-};
+const icons = {
+  success: { Icon: CheckCircleIcon, color: "text-emerald-700" },
+  danger: { Icon: AlertCircleIcon, color: "text-rose-700" },
+  warning: { Icon: AlertTriangleIcon, color: "text-amber-700" },
+  info: { Icon: InfoIcon, color: "text-stone-500" },
+} as const;
 
 const DURATION_MS = 5000;
 
@@ -57,27 +57,32 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="fixed bottom-4 right-4 z-[200] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            role={toast.variant === "danger" ? "alert" : "status"}
-            className={cn(
-              "flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-xs shadow-xs",
-              styles[toast.variant],
-            )}
-          >
-            <p className="leading-relaxed">{toast.message}</p>
-            <button
-              type="button"
-              onClick={() => dismiss(toast.id)}
-              aria-label="Cerrar aviso"
-              className="shrink-0 cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
+      {/* Top on phones so it never covers the fixed action bars at the bottom. */}
+      <div className="pointer-events-none fixed inset-x-4 top-[calc(var(--navbar)+0.75rem)] z-[200] flex flex-col items-end gap-2 sm:inset-x-auto sm:top-auto sm:right-6 sm:bottom-6 sm:w-full sm:max-w-sm">
+        {toasts.map((toast) => {
+          const { Icon, color } = icons[toast.variant];
+          return (
+            <div
+              key={toast.id}
+              role={toast.variant === "danger" ? "alert" : "status"}
+              className={cn(
+                "pointer-events-auto flex w-full items-start gap-3 rounded-xl border border-border-soft bg-white py-3 pr-2 pl-4 shadow-lg",
+                "transition-[opacity,translate] duration-200 starting:translate-y-2 starting:opacity-0",
+              )}
             >
-              <CloseIcon width={14} height={14} />
-            </button>
-          </div>
-        ))}
+              <Icon className={cn("mt-px shrink-0", color)} />
+              <p className="flex-1 text-[13px] leading-relaxed text-stone-800">{toast.message}</p>
+              <button
+                type="button"
+                onClick={() => dismiss(toast.id)}
+                aria-label="Cerrar aviso"
+                className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-900"
+              >
+                <CloseIcon width={14} height={14} />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );

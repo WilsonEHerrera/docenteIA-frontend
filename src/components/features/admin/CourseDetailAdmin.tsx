@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Alert } from "@/components/ui/Alert";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { BackLink, SectionHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
@@ -63,7 +64,8 @@ function ScheduleForm({ courseId, onCreated }: { courseId: string; onCreated: ()
   }
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-3">
+    <form onSubmit={submit} noValidate className="space-y-4 border-t border-border-soft pt-4">
+      <p className="text-[13px] font-medium text-stone-800">Agregar horario</p>
       <Select label="Día" value={weekday} onChange={(e) => setWeekday(e.target.value as Weekday)}>
         {WEEKDAYS.map((day) => (
           <option key={day.value} value={day.value}>
@@ -76,12 +78,8 @@ function ScheduleForm({ courseId, onCreated }: { courseId: string; onCreated: ()
         <Input label="Fin (HH:mm)" className="font-mono" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
       </div>
       <Input label="Salón (opcional)" value={room} onChange={(e) => setRoom(e.target.value)} />
-      {error && (
-        <p role="alert" className="text-xs text-rose-700">
-          {error}
-        </p>
-      )}
-      <Button type="submit" loading={saving}>
+      {error && <Alert variant="danger">{error}</Alert>}
+      <Button type="submit" variant="secondary" loading={saving}>
         Agregar horario
       </Button>
     </form>
@@ -91,11 +89,7 @@ function ScheduleForm({ courseId, onCreated }: { courseId: string; onCreated: ()
 export function CourseDetailAdmin({ courseId }: { courseId: string }) {
   const { data, error, loading, reload } = useApiQuery<CourseDetail>(`/courses/${courseId}`);
 
-  const back = (
-    <Link href="/admin/cursos" className="text-xs text-stone-600 underline underline-offset-2 hover:text-stone-900">
-      ← Cursos
-    </Link>
-  );
+  const back = <BackLink href="/admin/cursos" label="Cursos" />;
 
   if (error !== null) {
     return (
@@ -109,8 +103,11 @@ export function CourseDetailAdmin({ courseId }: { courseId: string }) {
     return (
       <div role="status" aria-label="Cargando curso" className="space-y-4">
         {back}
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-40 w-full" />
+        <Skeleton className="h-7 w-64 max-w-full" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Skeleton className="h-72 rounded-2xl" />
+          <Skeleton className="h-72 rounded-2xl" />
+        </div>
       </div>
     );
   }
@@ -119,26 +116,29 @@ export function CourseDetailAdmin({ courseId }: { courseId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
+      <div className="space-y-2">
         {back}
-        <h2 className="text-xl font-bold tracking-tight text-stone-900">{data.name}</h2>
-        <p className="text-sm text-stone-600">
-          {data.subject.name} · {data.teacher.fullName} ·{" "}
-          <span className="font-mono">{data.period}</span>
-        </p>
+        <SectionHeader
+          title={data.name}
+          description={
+            <>
+              {data.subject.name} · {data.teacher.fullName} · <span className="font-mono">{data.period}</span>
+            </>
+          }
+        />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2 lg:gap-6">
         <Card>
-          <h3 className="text-base font-semibold text-stone-900">Horarios</h3>
+          <CardHeader as="h3" title="Horarios" description="Días y horas en que se dicta el curso." />
           {data.schedules.length === 0 ? (
-            <EmptyState title="Sin horarios" description="Agrega los días y horas en que se dicta el curso." />
+            <EmptyState inset title="Sin horarios" description="Agrega los días y horas en que se dicta el curso." />
           ) : (
             <ul className="space-y-2">
               {data.schedules.map((schedule) => (
                 <li
                   key={schedule.id}
-                  className="flex items-center justify-between rounded-xl border border-border-soft p-3 text-xs"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border-soft px-3 py-2.5 text-[13px]"
                 >
                   <span className="font-medium text-stone-900">{dayLabel(schedule.weekday)}</span>
                   <span className="font-mono text-stone-700">
@@ -153,16 +153,22 @@ export function CourseDetailAdmin({ courseId }: { courseId: string }) {
         </Card>
 
         <Card>
-          <h3 className="text-base font-semibold text-stone-900">
-            Estudiantes <span className="font-mono text-stone-500">({data.students.length})</span>
-          </h3>
+          <CardHeader
+            as="h3"
+            title={
+              <>
+                Estudiantes <span className="font-mono font-normal text-stone-500">({data.students.length})</span>
+              </>
+            }
+          />
           {data.students.length === 0 ? (
             <EmptyState
+              inset
               title="Sin estudiantes matriculados"
               description="Matricula estudiantes desde la sección Matrícula."
             />
           ) : (
-            <Table containerClassName="max-h-80">
+            <Table label="Estudiantes matriculados" containerClassName="max-h-96">
               <THead>
                 <TR>
                   <TH>Código</TH>

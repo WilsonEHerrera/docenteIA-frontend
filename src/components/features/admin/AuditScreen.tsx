@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { SectionHeader } from "@/components/ui/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Input } from "@/components/ui/Input";
@@ -81,12 +82,12 @@ export function AuditScreen() {
     id ? (users.data?.data.find((user) => user.id === id)?.fullName ?? id) : "Sistema";
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-bold tracking-tight text-stone-900">Auditoría</h2>
+    <div className="space-y-5">
+      <SectionHeader title="Auditoría" description="Inicios de sesión y cambios registrados en la institución." />
 
-      <Card className="space-y-3">
+      <Card>
         <form
-          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
           onSubmit={(event) => {
             event.preventDefault();
             setPage(1);
@@ -129,8 +130,8 @@ export function AuditScreen() {
             value={draft.to}
             onChange={(e) => setDraft({ ...draft, to: e.target.value })}
           />
-          <div className="flex gap-2 sm:col-span-2 lg:col-span-4">
-            <Button type="submit">Filtrar</Button>
+          <div className="flex flex-wrap justify-end gap-2 border-t border-border-soft pt-4 sm:col-span-2 lg:col-span-4">
+            <Button type="submit">Aplicar filtros</Button>
             <Button
               variant="secondary"
               onClick={() => {
@@ -157,7 +158,7 @@ export function AuditScreen() {
         <EmptyState title="Sin registros" description="No hay eventos de auditoría con esos filtros." />
       ) : (
         <>
-          <Table>
+          <Table label="Registros de auditoría" className="min-w-[56rem]">
             <THead>
               <TR>
                 <TH>Fecha</TH>
@@ -171,16 +172,16 @@ export function AuditScreen() {
             <TBody>
               {logs.data.data.map((log) => (
                 <TR key={log.id}>
-                  <TD className="whitespace-nowrap font-mono">{formatDateTime(log.at)}</TD>
-                  <TD>{userName(log.userId)}</TD>
+                  <TD className="font-mono text-xs whitespace-nowrap">{formatDateTime(log.at)}</TD>
+                  <TD className="font-medium whitespace-nowrap text-stone-900">{userName(log.userId)}</TD>
                   <TD>
                     <Badge variant={DANGER.has(log.action) ? "danger" : "neutral"}>{log.action}</Badge>
                   </TD>
-                  <TD className="font-mono">
+                  <TD className="font-mono text-xs">
                     {log.resource}
                     {log.resourceId ? ` · ${log.resourceId}` : ""}
                   </TD>
-                  <TD className="font-mono">{log.ip ?? "—"}</TD>
+                  <TD className="font-mono text-xs whitespace-nowrap">{log.ip ?? "—"}</TD>
                   <TD className="max-w-xs break-all font-mono text-[11px] text-stone-600">
                     {diffPreview(log.diff)}
                   </TD>

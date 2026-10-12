@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { apiFetch } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
+import { AuthCard } from "./AuthCard";
 
 const MIN_PASSWORD = 10;
 
@@ -41,51 +41,41 @@ export function ResetPasswordForm({ token }: { token: string }) {
   }
 
   return (
-    <Card>
-      <h1 className="text-2xl font-bold tracking-tight text-stone-900">Nueva contraseña</h1>
-
+    <AuthCard
+      title="Nueva contraseña"
+      description={token && !done ? "Elige una contraseña segura que no uses en otros servicios." : undefined}
+      footerLink={{ href: "/login", label: "Volver a iniciar sesión" }}
+    >
       {!token ? (
-        <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-          El enlace no es válido. Solicita uno nuevo desde “Recuperar contraseña”.
-        </p>
+        <Alert variant="danger" title="Enlace no válido">
+          Solicita uno nuevo desde «Recuperar contraseña».
+        </Alert>
       ) : done ? (
-        <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">
-          Tu contraseña se actualizó. Ya puedes iniciar sesión.
-        </p>
+        <Alert variant="success" title="Contraseña actualizada">
+          Ya puedes iniciar sesión con tu nueva contraseña.
+        </Alert>
       ) : (
         <form onSubmit={submit} noValidate className="space-y-4">
-          {error && (
-            <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-              {error}
-            </p>
-          )}
-          <Input
+          {error && <Alert variant="danger">{error}</Alert>}
+          <PasswordInput
             label="Nueva contraseña"
-            type="password"
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             hint={`Mínimo ${MIN_PASSWORD} caracteres, que no sea común y que no incluya tu correo.`}
           />
-          <Input
+          <PasswordInput
             label="Repite la contraseña"
-            type="password"
             autoComplete="new-password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             error={fieldError}
           />
-          <Button type="submit" loading={loading} className="w-full">
+          <Button type="submit" loading={loading} className="mt-2 w-full">
             Guardar contraseña
           </Button>
         </form>
       )}
-
-      <p className="text-center text-xs">
-        <Link href="/login" className="text-stone-700 underline underline-offset-2 hover:text-stone-900">
-          Volver a iniciar sesión
-        </Link>
-      </p>
-    </Card>
+    </AuthCard>
   );
 }

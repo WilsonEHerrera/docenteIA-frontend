@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { RoleGate } from "@/components/layout/RoleGate";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { cn } from "@/lib/cn";
 
 const LINKS = [
@@ -20,28 +21,30 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <RoleGate roles={["ADMIN"]}>
       <div className="space-y-6">
-        <div className="space-y-3">
-          <h1 className="text-2xl font-bold tracking-tight text-stone-900">Administración</h1>
-          <nav aria-label="Secciones de administración" className="flex flex-wrap gap-1.5">
-            {LINKS.map((link) => {
-              const active =
-                link.href === "/admin" ? pathname === "/admin" : pathname.startsWith(link.href);
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors",
-                    active
-                      ? "bg-stone-900 text-white"
-                      : "bg-stone-100 text-stone-600 hover:text-stone-900",
-                  )}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
+        <div className="space-y-4">
+          <PageHeader title="Administración" description="Institución, usuarios, cursos, matrícula y auditoría." />
+          <nav aria-label="Secciones de administración" className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+            <ul className="flex min-w-max gap-1 border-b border-border-soft">
+              {LINKS.map((link) => {
+                const active = link.href === "/admin" ? pathname === "/admin" : pathname.startsWith(link.href);
+                return (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "relative -mb-px flex h-11 items-center border-b-2 px-3 text-sm font-medium whitespace-nowrap transition-colors",
+                        active
+                          ? "border-stone-900 text-stone-900"
+                          : "border-transparent text-stone-600 hover:border-stone-300 hover:text-stone-900",
+                      )}
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           </nav>
         </div>
         {children}

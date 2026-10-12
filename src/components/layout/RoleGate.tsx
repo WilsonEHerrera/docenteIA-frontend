@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ShieldIcon } from "@/components/ui/icons";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { hasRole } from "@/lib/auth/roles";
 import { useAuth } from "@/providers/AuthProvider";
@@ -14,6 +15,7 @@ export function RoleGate({ roles, children }: { roles: readonly Role[]; children
   if (!hasRole(user?.role, roles)) {
     return (
       <EmptyState
+        icon={<ShieldIcon width={20} height={20} />}
         title="No tienes acceso a esta sección"
         description="Tu rol no incluye esta pantalla. Si crees que es un error, contacta al administrador."
       />

@@ -38,10 +38,18 @@ function buildUrl(path: string, query?: RequestOptions<unknown>["query"]): strin
 
 let refreshInFlight: Promise<SessionResponse | null> | null = null;
 
+/** The backend rejected the refresh cookie: the session is really over (not a network hiccup). */
+function isInvalidSession(error: unknown): boolean {
+  return error instanceof ApiError && (error.statusCode === 401 || error.statusCode === 403);
+}
+
 /**
- * Single-flight refresh: concurrent 401s share one call to POST /auth/refresh (the cookie is
- * rotated on every call, so two parallel refreshes would invalidate the session).
- * Returns the new session, or null when there is no valid refresh cookie.
+ * Single-flight refresh: concurrent callers share one POST /auth/refresh (the cookie rotates on
+ * every call, so two parallel refreshes would trip reuse detection and revoke the session).
+ *  - resolves the new session on success;
+ *  - resolves null when the backend says the session is no longer valid (401/403);
+ *  - rejects with the ApiError when the session could not be checked (network, 5xx): the caller
+ *    must not treat that as a logout.
  */
 export function refreshSession(): Promise<SessionResponse | null> {
   if (!refreshInFlight) {
@@ -54,8 +62,9 @@ export function refreshSession(): Promise<SessionResponse | null> {
         });
         setAccessToken(session.accessToken);
         return session;
-      } catch {
-        return null;
+      } catch (error) {
+        if (isInvalidSession(error)) return null;
+        throw error;
       } finally {
         refreshInFlight = null;
       }
@@ -103,10 +112,18 @@ async function send<T>(path: string, options: RequestOptions<T>): Promise<T> {
 
   if (response.status === 401 && !options.skipRefresh) {
     // UNAUTHORIZED: access token missing or expired -> refresh once and retry (API_CONTRATO §6.2).
+    // A late 401 for a request sent with an older token, after another call already renewed the
+    // session, just retries with the current token: no second refresh, no logout.
+    const current = getAccessToken();
+    if (current && current !== token) {
+      return send<T>(path, { ...options, skipRefresh: true });
+    }
+    // Throws (without ending the session) if the refresh could not be checked.
     if (await refreshSession()) {
       return send<T>(path, { ...options, skipRefresh: true });
     }
-    expireSession();
+    // Only end the session if nobody renewed it while this refresh was failing.
+    if (getAccessToken() === current) expireSession();
   }
 
   if (!response.ok) throw await toApiError(response);

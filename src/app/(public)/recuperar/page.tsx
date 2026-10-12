@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { AuthCard } from "@/components/features/auth/AuthCard";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { apiFetch } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
@@ -34,46 +34,34 @@ export default function RecoverPage() {
   }
 
   return (
-    <Card>
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-stone-900">Recuperar contraseña</h1>
-        <p className="text-sm text-stone-600">
-          Te enviaremos un enlace para crear una contraseña nueva.
-        </p>
-      </div>
-
+    <AuthCard
+      title="Recuperar contraseña"
+      description="Te enviaremos un enlace para crear una contraseña nueva."
+      footerLink={{ href: "/login", label: "Volver a iniciar sesión" }}
+    >
       {state === "sent" ? (
-        <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">
-          Si el correo está registrado, recibirás un enlace en unos minutos. Revisa también la carpeta
-          de spam.
-        </div>
+        <Alert variant="success" title="Revisa tu correo">
+          Si el correo está registrado, recibirás un enlace en unos minutos. Revisa también la carpeta de spam.
+        </Alert>
       ) : (
         <form onSubmit={onSubmit} noValidate className="space-y-4">
-          {state === "error" && (
-            <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
-              {error}
-            </div>
-          )}
+          {state === "error" && <Alert variant="danger">{error}</Alert>}
           <Input
             label="Correo institucional"
             type="email"
+            inputMode="email"
             autoComplete="username"
+            placeholder="nombre@institucion.edu.co"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             error={fieldError}
             disabled={state === "loading"}
           />
-          <Button type="submit" loading={state === "loading"} className="w-full">
+          <Button type="submit" loading={state === "loading"} className="mt-2 w-full">
             Enviar enlace
           </Button>
         </form>
       )}
-
-      <p className="text-center text-xs">
-        <Link href="/login" className="text-stone-700 underline underline-offset-2 hover:text-stone-900">
-          Volver a iniciar sesión
-        </Link>
-      </p>
-    </Card>
+    </AuthCard>
   );
 }

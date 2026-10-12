@@ -1,12 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { AuthCard } from "@/components/features/auth/AuthCard";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { ApiError, errorMessage, isLocked } from "@/lib/api/errors";
+import { returnPathFromLocation } from "@/lib/auth/return-path";
 import { useAuth } from "@/providers/AuthProvider";
 
 type FormState = "idle" | "loading" | "error" | "locked";
@@ -31,7 +33,7 @@ export default function LoginPage() {
     setState("loading");
     try {
       await login(email.trim(), password);
-      router.replace("/inicio");
+      router.replace(returnPathFromLocation());
     } catch (error) {
       // 423 ACCOUNT_LOCKED and 429 TOO_MANY_REQUESTS block the form (API_CONTRATO §6.1).
       const blocked =
@@ -44,57 +46,42 @@ export default function LoginPage() {
   const loading = state === "loading";
 
   return (
-    <Card>
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight text-stone-900">Iniciar sesión</h1>
-        <p className="text-sm text-stone-600">Usa tu correo institucional.</p>
-      </div>
-
-      {(state === "error" || state === "locked") && (
-        <div
-          role="alert"
-          className={
-            state === "locked"
-              ? "rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-stone-700"
-              : "rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700"
-          }
-        >
+    <AuthCard
+      title="Iniciar sesión"
+      description="Ingresa con tu correo institucional."
+      footerLink={{ href: "/recuperar", label: "¿Olvidaste tu contraseña?" }}
+    >
+      {state === "locked" && (
+        <Alert variant="warning" title="Acceso bloqueado temporalmente">
           {message}
-        </div>
+        </Alert>
       )}
+      {state === "error" && <Alert variant="danger">{message}</Alert>}
 
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         <Input
           label="Correo institucional"
           type="email"
+          inputMode="email"
           autoComplete="username"
+          placeholder="nombre@institucion.edu.co"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           error={fieldErrors.email}
           disabled={loading || state === "locked"}
         />
-        <Input
+        <PasswordInput
           label="Contraseña"
-          type="password"
           autoComplete="current-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           error={fieldErrors.password}
           disabled={loading || state === "locked"}
         />
-        <Button type="submit" loading={loading} disabled={state === "locked"} className="w-full">
+        <Button type="submit" loading={loading} disabled={state === "locked"} className="mt-2 w-full">
           {loading ? "Ingresando…" : "Ingresar"}
         </Button>
       </form>
-
-      <p className="text-center text-xs">
-        <Link
-          href="/recuperar"
-          className="text-stone-700 underline underline-offset-2 hover:text-stone-900"
-        >
-          Recuperar contraseña
-        </Link>
-      </p>
-    </Card>
+    </AuthCard>
   );
 }

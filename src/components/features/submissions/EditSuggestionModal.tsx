@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
+import { SparkIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { Textarea } from "@/components/ui/Textarea";
@@ -15,11 +16,10 @@ interface EditSuggestionModalProps {
 }
 
 function Form({
+  formId,
   suggestion,
-  saving,
-  onClose,
   onSave,
-}: Omit<EditSuggestionModalProps, "suggestion"> & { suggestion: SuggestionWithStudent }) {
+}: Pick<EditSuggestionModalProps, "onSave"> & { formId: string; suggestion: SuggestionWithStudent }) {
   const [score, setScore] = useState(suggestion.finalScore ?? suggestion.suggestedScore ?? "");
   const [feedback, setFeedback] = useState(suggestion.feedback);
   const [error, setError] = useState<string | undefined>();
@@ -36,46 +36,53 @@ function Form({
   }
 
   return (
-    <form onSubmit={submit} noValidate className="space-y-4">
-      <p className="text-xs text-stone-600">
-        La IA sugirió <span className="font-mono font-semibold">{suggestion.suggestedScore ?? "—"}</span>.
-        Tu nota es la que se publica.
-      </p>
+    <form id={formId} onSubmit={submit} noValidate className="space-y-5">
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+        <p className="flex items-center gap-2 text-[13px] text-sky-900">
+          <SparkIcon width={16} height={16} className="shrink-0 text-sky-700" />
+          Nota sugerida por la IA
+        </p>
+        <p className="font-mono text-lg font-semibold text-sky-900">{suggestion.suggestedScore ?? "—"}</p>
+      </div>
       <Input
-        label="Nota final"
+        label="Tu nota final"
         inputMode="decimal"
         value={score}
         onChange={(event) => setScore(event.target.value)}
         error={error}
+        hint="Entre 0.00 y 5.00. Es la nota que verá el estudiante."
         className="font-mono"
       />
       <Textarea
-        label="Retroalimentación"
+        label="Retroalimentación para el estudiante"
         value={feedback}
+        rows={6}
         onChange={(event) => setFeedback(event.target.value)}
       />
-      <div className="flex justify-end gap-2">
-        <Button variant="secondary" onClick={onClose} disabled={saving}>
-          Cancelar
-        </Button>
-        <Button type="submit" loading={saving}>
-          Guardar y aprobar
-        </Button>
-      </div>
     </form>
   );
 }
 
 export function EditSuggestionModal({ suggestion, saving, onClose, onSave }: EditSuggestionModalProps) {
+  const formId = useId();
   return (
     <Modal
       open={suggestion !== null}
       onClose={onClose}
       title={suggestion ? `Editar: ${suggestion.studentName}` : "Editar"}
+      description="Ajusta la nota y la retroalimentación. Al guardar, quedan aprobadas con tus cambios."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>
+            Cancelar
+          </Button>
+          <Button type="submit" form={formId} loading={saving}>
+            Guardar y aprobar
+          </Button>
+        </>
+      }
     >
-      {suggestion && (
-        <Form key={suggestion.id} suggestion={suggestion} saving={saving} onClose={onClose} onSave={onSave} />
-      )}
+      {suggestion && <Form key={suggestion.id} formId={formId} suggestion={suggestion} onSave={onSave} />}
     </Modal>
   );
 }

@@ -34,7 +34,11 @@ export function Tabs({ items, value, onChange, className, ...props }: TabsProps)
   }
 
   return (
-    <div role="tablist" aria-label={props["aria-label"]} className={cn("flex flex-wrap gap-1.5", className)}>
+    <div
+      role="tablist"
+      aria-label={props["aria-label"]}
+      className={cn("inline-flex max-w-full gap-1 overflow-x-auto rounded-xl bg-stone-100 p-1", className)}
+    >
       {items.map((item, index) => {
         const active = item.value === value;
         return (
@@ -51,10 +55,8 @@ export function Tabs({ items, value, onChange, className, ...props }: TabsProps)
             onClick={() => onChange(item.value)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              "rounded-lg text-xs font-medium px-3.5 py-1.5 transition-colors cursor-pointer",
-              active
-                ? "bg-stone-900 text-white"
-                : "bg-stone-100 text-stone-600 hover:text-stone-900",
+              "h-9 shrink-0 cursor-pointer rounded-lg px-4 text-[13px] font-medium whitespace-nowrap transition-[background-color,color,box-shadow] duration-150 sm:h-8",
+              active ? "bg-white text-stone-900 shadow-xs" : "text-stone-600 hover:text-stone-900",
             )}
           >
             {item.label}

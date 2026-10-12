@@ -2,7 +2,10 @@
 
 import { useState, type ChangeEvent, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Alert } from "@/components/ui/Alert";
+import { Card, CardHeader } from "@/components/ui/Card";
+import { FileChip, FileInput } from "@/components/ui/FileInput";
+import { SectionHeader } from "@/components/ui/PageHeader";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/Table";
@@ -58,46 +61,44 @@ function ImportCard() {
 
   return (
     <Card>
-      <h3 className="text-base font-semibold text-stone-900">Importar matrícula (CSV)</h3>
-      <p className="text-xs leading-relaxed text-stone-600">
-        Primera fila obligatoria:{" "}
-        <code className="font-mono">course,studentCode,fullName,email</code>. El campo{" "}
-        <code className="font-mono">course</code> es el nombre del curso. Máximo 2000 filas y 1 MB.
-      </p>
-      <input
-        type="file"
-        accept=".csv,text/csv"
-        onChange={onFile}
-        aria-label="Archivo CSV de matrícula"
-        className="block w-full cursor-pointer text-xs text-stone-700 file:mr-3 file:cursor-pointer file:rounded-lg file:border file:border-stone-200 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-medium"
+      <CardHeader
+        as="h3"
+        title="Importar matrícula (CSV)"
+        description={
+          <>
+            Primera fila obligatoria: <code className="font-mono text-xs">course,studentCode,fullName,email</code>. El
+            campo <code className="font-mono text-xs">course</code> es el nombre del curso. Máximo 2000 filas y 1 MB.
+          </>
+        }
       />
-      {file && <p className="font-mono text-[11px] text-stone-500">{file.name}</p>}
-      {problem && (
-        <p role="alert" className="text-xs text-rose-700">
-          {problem}
-        </p>
-      )}
-      <Button onClick={() => void upload()} loading={loading} disabled={!file}>
-        Importar
-      </Button>
+      <FileInput label="Archivo CSV de matrícula" hint="Solo .csv, máximo 1 MB." accept=".csv,text/csv" onChange={onFile}>
+        {file && <FileChip name={file.name} onRemove={() => setFile(null)} />}
+      </FileInput>
+      {problem && <Alert variant="danger">{problem}</Alert>}
+      <div className="flex justify-end">
+        <Button onClick={() => void upload()} loading={loading} disabled={!file} className="w-full sm:w-auto">
+          Importar
+        </Button>
+      </div>
 
       {report && (
-        <div className="space-y-3" role="status">
-          <dl className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+        <div className="space-y-3 border-t border-border-soft pt-4" role="status">
+          <p className="text-[13px] font-medium text-stone-800">Resultado de la importación</p>
+          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               ["Filas", report.totalRows],
               ["Matriculados", report.enrolled],
               ["Ya matriculados", report.alreadyEnrolled],
               ["Estudiantes nuevos", report.studentsCreated],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-xl border border-border-soft p-2">
-                <dd className="font-mono text-lg font-semibold text-stone-900">{value}</dd>
-                <dt className="text-[11px] text-stone-600">{label}</dt>
+              <div key={label} className="flex flex-col-reverse rounded-xl border border-border-soft bg-stone-50/60 px-3 py-2.5">
+                <dd className="font-mono text-xl font-semibold text-stone-900 tabular-nums">{value}</dd>
+                <dt className="text-xs text-stone-600">{label}</dt>
               </div>
             ))}
           </dl>
           {report.errors.length > 0 && (
-            <Table containerClassName="max-h-64">
+            <Table label="Errores de la importación" containerClassName="max-h-64">
               <THead>
                 <TR>
                   <TH numeric>Fila</TH>
@@ -155,7 +156,7 @@ function StudentCard() {
 
   return (
     <Card>
-      <h3 className="text-base font-semibold text-stone-900">Nuevo estudiante</h3>
+      <CardHeader as="h3" title="Nuevo estudiante" description="Crea al estudiante antes de matricularlo." />
       <form onSubmit={submit} noValidate className="space-y-3">
         <Input label="Código" className="font-mono" value={code} onChange={(e) => setCode(e.target.value)} error={errors.code} />
         <Input label="Nombre completo" value={fullName} onChange={(e) => setFullName(e.target.value)} error={errors.fullName} />
@@ -195,7 +196,7 @@ function EnrollCard() {
 
   return (
     <Card>
-      <h3 className="text-base font-semibold text-stone-900">Matricular estudiante</h3>
+      <CardHeader as="h3" title="Matricular estudiante" description="Asigna un estudiante existente a un curso." />
       <form onSubmit={submit} noValidate className="space-y-3">
         <Select label="Curso" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
           <option value="">{courses.loading ? "Cargando…" : "Selecciona un curso…"}</option>
@@ -211,11 +212,7 @@ function EnrollCard() {
           value={studentCode}
           onChange={(e) => setStudentCode(e.target.value)}
         />
-        {error && (
-          <p role="alert" className="text-xs text-rose-700">
-            {error}
-          </p>
-        )}
+        {error && <Alert variant="danger">{error}</Alert>}
         <Button type="submit" loading={saving}>
           Matricular
         </Button>
@@ -226,10 +223,10 @@ function EnrollCard() {
 
 export function EnrollmentScreen() {
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-bold tracking-tight text-stone-900">Matrícula</h2>
+    <div className="space-y-5">
+      <SectionHeader title="Matrícula" description="Importa la matrícula completa o registra estudiantes uno a uno." />
       <ImportCard />
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 lg:grid-cols-2 lg:gap-6">
         <StudentCard />
         <EnrollCard />
       </div>

@@ -1,23 +1,29 @@
 import { errorMessage } from "@/lib/api/errors";
+import { Alert } from "./Alert";
 import { Button } from "./Button";
+import { RefreshIcon } from "./icons";
 
 interface ErrorStateProps {
   error: unknown;
   onRetry?: () => void;
+  title?: string;
 }
 
-export function ErrorState({ error, onRetry }: ErrorStateProps) {
+export function ErrorState({ error, onRetry, title }: ErrorStateProps) {
   return (
-    <div
-      role="alert"
-      className="flex flex-col items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4"
+    <Alert
+      variant="danger"
+      title={title ?? (onRetry ? "No pudimos cargar esta información" : undefined)}
+      action={
+        onRetry && (
+          <Button variant="secondary" size="sm" onClick={onRetry}>
+            <RefreshIcon />
+            Reintentar
+          </Button>
+        )
+      }
     >
-      <p className="text-sm text-rose-700">{errorMessage(error)}</p>
-      {onRetry && (
-        <Button variant="secondary" onClick={onRetry}>
-          Reintentar
-        </Button>
-      )}
-    </div>
+      {errorMessage(error)}
+    </Alert>
   );
 }
