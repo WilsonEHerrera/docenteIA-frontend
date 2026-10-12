@@ -88,6 +88,10 @@ async function send<T>(path: string, options: RequestOptions<T>): Promise<T> {
   let body: BodyInit | undefined;
   if (options.body instanceof FormData) {
     body = options.body;
+  } else if (options.body instanceof Blob) {
+    // Raw photo body (image/jpeg | image/png), not multipart (API_CONTRATO §1).
+    headers["Content-Type"] = options.contentType ?? options.body.type;
+    body = options.body;
   } else if (typeof options.body === "string") {
     headers["Content-Type"] = options.contentType ?? "text/plain";
     body = options.body;

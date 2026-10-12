@@ -24,45 +24,39 @@ import { useToast } from "@/components/ui/Toast";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { apiFetch } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
-import type { Activity, Course, GradebookRow, Paginated } from "@/types/api";
+import type { Course, GradebookView, Paginated } from "@/types/api";
 import { GradebookCharts } from "./GradebookCharts";
 
 type View = "table" | "charts";
-type ExportFormat = "pdf" | "xlsx";
-
-interface Gradebook {
-  activities: Activity[];
-  rows: GradebookRow[];
-}
 
 export function GradebookScreen({ courseId }: { courseId: string }) {
   const toast = useToast();
-  const book = useApiQuery<Gradebook>(`/courses/${courseId}/gradebook`);
+  const book = useApiQuery<GradebookView>(`/courses/${courseId}/gradebook`);
   const courses = useApiQuery<Paginated<Course>>("/courses", { limit: 100 });
   const [view, setView] = useState<View>("table");
-  const [exporting, setExporting] = useState<ExportFormat | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const course = courses.data?.data.find((item) => item.id === courseId);
 
-  async function exportBook(format: ExportFormat) {
-    setExporting(format);
+  // CSV is the only export format the backend offers (API_CONTRATO §6.10).
+  async function exportBook() {
+    if (!book.data) return;
+    setExporting(true);
     try {
-      // TODO(api): the contract lists `?type&format`; courseId is assumed until confirmed.
       const blob = await apiFetch<Blob>("/reports/export", {
-        query: { type: "gradebook", format, courseId },
+        query: { type: "performance", format: "csv", courseId, period: book.data.period },
         responseType: "blob",
       });
-      const extension = blob.type === "text/csv" ? "csv" : format;
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `notas-${courseId}.${extension}`;
+      link.download = `notas-${courseId}.csv`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
       toast.show(errorMessage(error), "danger");
     } finally {
-      setExporting(null);
+      setExporting(false);
     }
   }
 
@@ -75,30 +69,17 @@ export function GradebookScreen({ courseId }: { courseId: string }) {
       description={course ? `${course.subject.name} · Periodo ${course.period}` : undefined}
       actions={
         ready && (
-          <>
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={exporting === "pdf"}
-              disabled={exporting !== null}
-              onClick={() => void exportBook("pdf")}
-              aria-label="Exportar planilla en PDF"
-            >
-              {exporting !== "pdf" && <DownloadIcon />}
-              PDF
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={exporting === "xlsx"}
-              disabled={exporting !== null}
-              onClick={() => void exportBook("xlsx")}
-              aria-label="Exportar planilla en Excel"
-            >
-              {exporting !== "xlsx" && <DownloadIcon />}
-              Excel
-            </Button>
-          </>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={exporting}
+            disabled={exporting || !book.data}
+            onClick={() => void exportBook()}
+            aria-label="Exportar planilla en CSV"
+          >
+            {!exporting && <DownloadIcon />}
+            CSV
+          </Button>
         )
       }
     />
@@ -123,9 +104,7 @@ export function GradebookScreen({ courseId }: { courseId: string }) {
     );
   }
 
-  const { activities, rows } = book.data;
-  const weightSum = activities.reduce((sum, activity) => sum + Number(activity.weightPct), 0);
-  const weightsOk = Math.abs(weightSum - 100) < 0.001;
+  const { activities, rows, weightsTotal, weightsComplete: weightsOk } = book.data;
   const atRisk = rows.filter((row) => row.atRisk).length;
 
   return (
@@ -142,8 +121,8 @@ export function GradebookScreen({ courseId }: { courseId: string }) {
         <>
           {!weightsOk && (
             <Alert variant="warning" title="Los pesos no suman 100 %">
-              Las actividades suman <span className="font-mono font-semibold">{weightSum} %</span>. El promedio puede
-              no ser confiable: ajusta los pesos de las actividades.
+              Las actividades suman <span className="font-mono font-semibold">{weightsTotal} %</span>. El promedio es
+              parcial: se calcula sobre lo ya calificado hasta completar el 100 %.
             </Alert>
           )}
 
@@ -160,7 +139,7 @@ export function GradebookScreen({ courseId }: { courseId: string }) {
             <StatTile
               label="Peso de las actividades"
               icon={<GaugeIcon />}
-              value={`${weightSum} %`}
+              value={`${weightsTotal} %`}
               tone={weightsOk ? "default" : "warning"}
               hint={weightsOk ? "Suma completa." : "Debe sumar 100 %."}
             />
@@ -215,7 +194,7 @@ export function GradebookScreen({ courseId }: { courseId: string }) {
                         </TD>
                       ))}
                       <TD numeric className="font-semibold text-stone-900">
-                        {row.average}
+                        {row.average ?? <span className="text-stone-400">—</span>}
                       </TD>
                       <TD numeric>{row.absences}</TD>
                       <TD className="whitespace-nowrap">
@@ -232,7 +211,6 @@ export function GradebookScreen({ courseId }: { courseId: string }) {
               <OriginTag origin="auto" label="Promedios, fallas y riesgo calculados por el sistema" />
             </div>
           )}
-          {/* TODO(api): inline grade editing needs a grade id per cell (PUT /grades/:id); GradebookRow does not expose it. */}
         </>
       )}
     </div>

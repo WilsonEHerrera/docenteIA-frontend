@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AiSuggestionCard } from "@/components/ai/AiSuggestionCard";
 import { ApprovalBar } from "@/components/ai/ApprovalBar";
 import { ManualModeBanner } from "@/components/ai/ManualModeBanner";
@@ -13,20 +13,55 @@ import { useToast } from "@/components/ui/Toast";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { apiFetch } from "@/lib/api/client";
 import { errorMessage, isServiceUnavailable } from "@/lib/api/errors";
-import type { AiSuggestion, Paginated, SuggestionWithStudent } from "@/types/api";
+import type { AiSuggestion, Paginated, SubmissionView, SuggestionWithStudent } from "@/types/api";
 import { EditSuggestionModal } from "./EditSuggestionModal";
 import { UploadPanel } from "./UploadPanel";
 
 interface SubmissionsScreenProps {
   activityId: string;
   activityName: string;
+  courseId: string;
 }
 
-export function SubmissionsScreen({ activityId, activityName }: SubmissionsScreenProps) {
+const POLL_START_MS = 2000;
+const POLL_MAX_MS = 8000;
+
+export function SubmissionsScreen({ activityId, activityName, courseId }: SubmissionsScreenProps) {
   const toast = useToast();
-  const list = useApiQuery<Paginated<SuggestionWithStudent>>(`/activities/${activityId}/suggestions`);
+  const list = useApiQuery<Paginated<SuggestionWithStudent>>(`/activities/${activityId}/suggestions`, {
+    limit: 100,
+  });
+  const submissions = useApiQuery<Paginated<SubmissionView>>(`/activities/${activityId}/submissions`, {
+    limit: 100,
+  });
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editing, setEditing] = useState<SuggestionWithStudent | null>(null);
+  const delay = useRef(POLL_START_MS);
+
+  const submissionList = submissions.data?.data ?? [];
+  const processing = submissionList.filter((item) => item.status === "PROCESSING").length;
+  const manualRequired = submissionList.filter((item) => item.status === "MANUAL_REQUIRED");
+  const { reload: reloadList } = list;
+  const { reload: reloadSubmissions } = submissions;
+
+  // Poll with backoff while the AI is processing entregas (API_CONTRATO §5.1).
+  useEffect(() => {
+    if (processing === 0) {
+      delay.current = POLL_START_MS;
+      return;
+    }
+    const timer = setTimeout(() => {
+      delay.current = Math.min(delay.current * 1.5, POLL_MAX_MS);
+      reloadSubmissions();
+      reloadList();
+    }, delay.current);
+    return () => clearTimeout(timer);
+  }, [processing, submissions.fetching, reloadSubmissions, reloadList]);
+
+  function reloadAll() {
+    reloadList();
+    reloadSubmissions();
+  }
 
   const suggestions = list.data?.data ?? [];
   const reviewed = suggestions.filter((item) => item.status !== "PENDING_APPROVAL").length;
@@ -73,7 +108,7 @@ export function SubmissionsScreen({ activityId, activityName }: SubmissionsScree
 
       <div className="grid items-start gap-6 lg:grid-cols-12 lg:gap-8">
         <div className="lg:sticky lg:top-[calc(var(--navbar)+1.5rem)] lg:order-2 lg:col-span-5 lg:max-h-[calc(100dvh-var(--navbar)-3rem)] lg:overflow-y-auto lg:rounded-2xl">
-          <UploadPanel activityId={activityId} onUploaded={list.reload} />
+          <UploadPanel activityId={activityId} courseId={courseId} onUploaded={reloadAll} />
         </div>
 
         <section className="space-y-4 lg:order-1 lg:col-span-7" aria-labelledby="suggestions-heading">
@@ -91,6 +126,21 @@ export function SubmissionsScreen({ activityId, activityName }: SubmissionsScree
             }
           />
 
+          {processing > 0 && (
+            <p role="status" className="flex items-center gap-2 text-[13px] text-stone-600">
+              <span
+                aria-hidden="true"
+                className="size-4 shrink-0 animate-spin rounded-full border-2 border-stone-300 border-t-stone-900"
+              />
+              La IA está procesando {processing} {processing === 1 ? "entrega" : "entregas"}…
+            </p>
+          )}
+          {manualRequired.length > 0 && (
+            <ManualModeBanner title="Entregas para calificar a mano">
+              La IA no pudo proponer nota para:{" "}
+              {manualRequired.map((item) => item.studentName).join(", ")}. Califícalas desde la planilla de notas.
+            </ManualModeBanner>
+          )}
           {list.error !== null ? (
             isServiceUnavailable(list.error) ? (
               <ManualModeBanner>

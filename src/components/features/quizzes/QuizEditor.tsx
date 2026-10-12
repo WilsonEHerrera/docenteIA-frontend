@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ManualModeBanner } from "@/components/ai/ManualModeBanner";
 import { AiBadge } from "@/components/ai/OriginTag";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
@@ -9,9 +10,10 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { FieldMessage } from "@/components/ui/Field";
-import { CheckIcon, RefreshIcon, TrashIcon } from "@/components/ui/icons";
+import { CheckIcon, PlusIcon, RefreshIcon, TrashIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/Input";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Textarea } from "@/components/ui/Textarea";
 import { useToast } from "@/components/ui/Toast";
@@ -19,40 +21,81 @@ import { useApiQuery } from "@/hooks/useApiQuery";
 import { apiFetch } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/cn";
-import type { Quiz, QuizQuestion } from "@/types/todo-api";
+import type { QuestionType, QuestionView, QuizView } from "@/types/api";
 
-function validate(question: QuizQuestion): string | null {
-  if (question.text.trim() === "") return "Escribe el enunciado de la pregunta.";
-  if (question.type === "CLOSED") {
+const POLL_START_MS = 2000;
+const POLL_MAX_MS = 8000;
+const TRUE_FALSE_OPTIONS = ["Verdadero", "Falso"];
+
+/** A question as edited in the screen: `isNew` ones do not exist in the backend yet. */
+interface Draft extends QuestionView {
+  isNew?: boolean;
+  dirty?: boolean;
+}
+
+const TYPE_LABEL: Record<QuestionType, string> = {
+  MULTIPLE_CHOICE: "Opción múltiple",
+  TRUE_FALSE: "Verdadero / falso",
+  OPEN: "Abierta",
+};
+
+function validate(question: Draft): string | null {
+  if (question.prompt.trim() === "") return "Escribe el enunciado de la pregunta.";
+  if (question.type === "MULTIPLE_CHOICE") {
     const options = question.options.map((option) => option.trim());
     if (options.length < 2 || options.some((option) => option === "")) {
-      return "Una pregunta cerrada necesita al menos dos opciones con texto.";
+      return "Una pregunta de opción múltiple necesita al menos dos opciones con texto.";
     }
-    if (!question.answer || !options.includes(question.answer.trim())) {
+    if (new Set(options).size !== options.length) return "Las opciones no pueden repetirse.";
+  }
+  if (question.type !== "OPEN") {
+    const index = question.correctIndex;
+    if (index === null || index < 0 || index >= question.options.length) {
       return "Marca cuál es la respuesta correcta.";
     }
   }
   return null;
 }
 
+/** Body for create/update: OPEN questions carry neither options nor correctIndex. */
+function contentOf(question: Draft) {
+  const base = { prompt: question.prompt.trim() };
+  if (question.type === "OPEN") return base;
+  return {
+    ...base,
+    options: question.options.map((option) => option.trim()),
+    correctIndex: question.correctIndex,
+  };
+}
+
+function statusBadge(status: QuestionView["status"]) {
+  if (status === "APPROVED") return <Badge variant="success">Aprobada</Badge>;
+  if (status === "EDITED") return <Badge variant="success">Editada</Badge>;
+  if (status === "REJECTED") return <Badge variant="neutral">Descartada</Badge>;
+  return <AiBadge />;
+}
+
 interface QuestionCardProps {
   index: number;
-  question: QuizQuestion;
+  question: Draft;
   readOnly: boolean;
   busy: boolean;
   error: string | null;
-  onChange: (question: QuizQuestion) => void;
-  onDelete: () => void;
-  onRegenerate: () => void;
+  onChange: (question: Draft) => void;
+  onReject: () => void;
+  onApprove: () => void;
 }
 
-function QuestionCard({ index, question, readOnly, busy, error, onChange, onDelete, onRegenerate }: QuestionCardProps) {
+function QuestionCard({ index, question, readOnly, busy, error, onChange, onReject, onApprove }: QuestionCardProps) {
+  const rejected = question.status === "REJECTED";
+  const locked = readOnly || rejected;
   return (
     <Card
       padding="none"
       spacing="none"
-      tone={error ? "danger" : readOnly ? "default" : "ai"}
+      tone={error ? "danger" : locked ? "default" : "ai"}
       aria-label={`Pregunta ${index + 1}`}
+      className={rejected ? "opacity-70" : undefined}
     >
       <div className="flex items-center justify-between gap-2 border-b border-border-soft px-4 py-3 sm:px-5">
         <h3 className="flex items-center gap-2.5 text-sm font-semibold text-stone-900">
@@ -61,24 +104,27 @@ function QuestionCard({ index, question, readOnly, busy, error, onChange, onDele
           </span>
           Pregunta {index + 1}
         </h3>
-        <Badge variant="neutral">{question.type === "CLOSED" ? "Opción múltiple" : "Abierta"}</Badge>
+        <span className="flex items-center gap-2">
+          {!question.isNew && statusBadge(question.status)}
+          <Badge variant="neutral">{TYPE_LABEL[question.type]}</Badge>
+        </span>
       </div>
 
       <div className="space-y-4 p-4 sm:p-5">
         <Textarea
           label="Enunciado"
-          value={question.text}
-          disabled={readOnly}
+          value={question.prompt}
+          disabled={locked}
           rows={3}
           className="min-h-20"
-          onChange={(event) => onChange({ ...question, text: event.target.value })}
+          onChange={(event) => onChange({ ...question, prompt: event.target.value, dirty: true })}
         />
 
-        {question.type === "CLOSED" && (
-          <fieldset className="space-y-2" disabled={readOnly}>
+        {question.type !== "OPEN" && (
+          <fieldset className="space-y-2" disabled={locked}>
             <legend className="mb-2 text-[13px] font-medium text-stone-800">Opciones · marca la correcta</legend>
             {question.options.map((option, optionIndex) => {
-              const correct = question.answer === option && option !== "";
+              const correct = question.correctIndex === optionIndex;
               return (
                 <div
                   key={optionIndex}
@@ -93,7 +139,7 @@ function QuestionCard({ index, question, readOnly, busy, error, onChange, onDele
                       name={`answer-${question.id}`}
                       aria-label={`Opción ${optionIndex + 1} es la respuesta correcta`}
                       checked={correct}
-                      onChange={() => onChange({ ...question, answer: option })}
+                      onChange={() => onChange({ ...question, correctIndex: optionIndex, dirty: true })}
                       className="size-4 cursor-pointer accent-emerald-700"
                     />
                   </label>
@@ -101,12 +147,13 @@ function QuestionCard({ index, question, readOnly, busy, error, onChange, onDele
                     <Input
                       aria-label={`Opción ${optionIndex + 1}`}
                       value={option}
+                      // True/false options are fixed by the contract.
+                      disabled={question.type === "TRUE_FALSE"}
                       onChange={(event) => {
                         const options = question.options.map((value, i) =>
                           i === optionIndex ? event.target.value : value,
                         );
-                        const answer = question.answer === option ? event.target.value : question.answer;
-                        onChange({ ...question, options, answer });
+                        onChange({ ...question, options, dirty: true });
                       }}
                     />
                   </div>
@@ -127,68 +174,83 @@ function QuestionCard({ index, question, readOnly, busy, error, onChange, onDele
 
       {!readOnly && (
         <div className="flex flex-wrap justify-end gap-2 border-t border-border-soft bg-stone-50/60 px-4 py-3 sm:px-5">
-          <Button variant="destructive" size="sm" onClick={onDelete} disabled={busy}>
-            <TrashIcon />
-            Eliminar
-          </Button>
-          <Button variant="secondary" size="sm" onClick={onRegenerate} loading={busy}>
-            {!busy && <RefreshIcon />}
-            Regenerar con IA
-          </Button>
+          {!rejected && (
+            <Button variant="destructive" size="sm" onClick={onReject} disabled={busy}>
+              <TrashIcon />
+              {question.isNew ? "Quitar" : "Descartar"}
+            </Button>
+          )}
+          {(rejected || (!question.isNew && question.status === "PENDING_APPROVAL")) && (
+            <Button variant="secondary" size="sm" onClick={onApprove} loading={busy}>
+              {!busy && (rejected ? <RefreshIcon /> : <CheckIcon />)}
+              {rejected ? "Restaurar" : "Aprobar"}
+            </Button>
+          )}
         </div>
       )}
     </Card>
   );
 }
 
-function Editor({ quiz: initial }: { quiz: Quiz }) {
+function Editor({ quiz: initial }: { quiz: QuizView }) {
   const toast = useToast();
   const [quiz, setQuiz] = useState(initial);
-  const [questions, setQuestions] = useState(initial.questions);
+  const [questions, setQuestions] = useState<Draft[]>(initial.questions);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [newType, setNewType] = useState<QuestionType>("MULTIPLE_CHOICE");
+  const newCounter = useRef(0);
   const published = quiz.status === "PUBLISHED";
+
+  /** Replaces the local state with what the backend now has. */
+  async function refresh(): Promise<QuizView> {
+    const fresh = await apiFetch<QuizView>(`/quizzes/${quiz.id}`);
+    setQuiz(fresh);
+    setQuestions(fresh.questions);
+    return fresh;
+  }
 
   function validateAll(): boolean {
     const found: Record<string, string> = {};
-    questions.forEach((question) => {
-      const problem = validate(question);
-      if (problem) found[question.id] = problem;
-    });
+    questions
+      .filter((question) => question.status !== "REJECTED")
+      .forEach((question) => {
+        const problem = validate(question);
+        if (problem) found[question.id] = problem;
+      });
     setErrors(found);
     return Object.keys(found).length === 0;
   }
 
-  async function regenerate(question: QuizQuestion) {
-    setBusyId(question.id);
-    try {
-      // TODO(api): regenerating a single question is not in the contract.
-      const updated = await apiFetch<Quiz>(`/quizzes/${quiz.id}/questions/${question.id}/regenerate`, {
-        method: "POST",
-      });
-      const fresh = updated.questions.find((item) => item.id === question.id);
-      if (fresh) setQuestions((current) => current.map((item) => (item.id === fresh.id ? fresh : item)));
-      toast.show("Pregunta regenerada. Revísala antes de publicar.", "info");
-    } catch (error) {
-      toast.show(errorMessage(error), "danger");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function save(): Promise<boolean> {
+  /** Writes new and edited questions. Returns false (and writes nothing) if any is invalid. */
+  async function persist(): Promise<boolean> {
     if (!validateAll()) return false;
-    const updated = await apiFetch<Quiz>(`/quizzes/${quiz.id}`, { method: "PATCH", body: { questions } });
-    setQuiz(updated);
+    for (const question of questions) {
+      if (question.status === "REJECTED") continue;
+      if (question.isNew) {
+        await apiFetch(`/quizzes/${quiz.id}/questions`, {
+          method: "POST",
+          body: { type: question.type, ...contentOf(question) },
+        });
+      } else if (question.dirty) {
+        await apiFetch(`/quizzes/${quiz.id}/questions/${question.id}`, {
+          method: "PATCH",
+          body: contentOf(question),
+        });
+      }
+    }
     return true;
   }
 
   async function onSave() {
     setSaving(true);
     try {
-      if (await save()) toast.show("Cambios guardados.", "success");
+      if (await persist()) {
+        await refresh();
+        toast.show("Cambios guardados.", "success");
+      }
     } catch (error) {
       toast.show(errorMessage(error), "danger");
     } finally {
@@ -196,21 +258,78 @@ function Editor({ quiz: initial }: { quiz: Quiz }) {
     }
   }
 
+  async function setQuestionStatus(question: Draft, status: "APPROVED" | "REJECTED") {
+    if (question.isNew) {
+      setQuestions((current) => current.filter((item) => item.id !== question.id));
+      return;
+    }
+    if (status === "APPROVED") {
+      const problem = validate(question);
+      if (problem) {
+        setErrors((current) => ({ ...current, [question.id]: problem }));
+        return;
+      }
+    }
+    setBusyId(question.id);
+    try {
+      // Edits first (they leave the question EDITED), then the explicit decision.
+      if (question.dirty && status === "APPROVED") {
+        await apiFetch(`/quizzes/${quiz.id}/questions/${question.id}`, {
+          method: "PATCH",
+          body: contentOf(question),
+        });
+      }
+      await apiFetch(`/quizzes/${quiz.id}/questions/${question.id}`, { method: "PATCH", body: { status } });
+      await refresh();
+      toast.show(status === "APPROVED" ? "Pregunta aprobada." : "Pregunta descartada.", "info");
+    } catch (error) {
+      toast.show(errorMessage(error), "danger");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function onPublish() {
     setPublishing(true);
     try {
-      if (!(await save())) return;
-      const result = await apiFetch<Quiz>(`/quizzes/${quiz.id}/publish`, { method: "POST" });
+      if (!(await persist())) return;
+      // "Aprobar y publicar" is the teacher's explicit decision on every pending question.
+      const fresh = await refresh();
+      if (fresh.questions.some((question) => question.status === "PENDING_APPROVAL")) {
+        await apiFetch<QuizView>(`/quizzes/${quiz.id}/questions/approve`, { method: "POST" });
+      }
+      const result = await apiFetch<QuizView>(`/quizzes/${quiz.id}/publish`, { method: "POST" });
       setQuiz(result);
+      setQuestions(result.questions);
       toast.show("Cuestionario publicado.", "success");
     } catch (error) {
       toast.show(errorMessage(error), "danger");
+      // Keep the screen in step with whatever did get written.
+      void refresh().catch(() => undefined);
     } finally {
       setPublishing(false);
     }
   }
 
+  function addQuestion() {
+    newCounter.current += 1;
+    const draft: Draft = {
+      id: `new-${newCounter.current}`,
+      position: questions.length + 1,
+      type: newType,
+      prompt: "",
+      options: newType === "MULTIPLE_CHOICE" ? ["", ""] : newType === "TRUE_FALSE" ? TRUE_FALSE_OPTIONS : [],
+      correctIndex: newType === "TRUE_FALSE" ? 0 : null,
+      explanation: "",
+      status: "APPROVED",
+      isNew: true,
+      dirty: true,
+    };
+    setQuestions((current) => [...current, draft]);
+  }
+
   const errorCount = Object.keys(errors).length;
+  const active = questions.filter((question) => question.status !== "REJECTED").length;
 
   return (
     <div className="max-w-4xl space-y-6 pb-4">
@@ -230,7 +349,7 @@ function Editor({ quiz: initial }: { quiz: Quiz }) {
         description={
           published
             ? undefined
-            : "Revisa, edita, regenera o elimina preguntas. Nada se publica hasta que lo apruebes."
+            : "Revisa, edita, aprueba o descarta preguntas. Nada se publica hasta que lo apruebes."
         }
       />
 
@@ -240,10 +359,21 @@ function Editor({ quiz: initial }: { quiz: Quiz }) {
         </Alert>
       )}
 
+      {quiz.status === "MANUAL_REQUIRED" && (
+        <ManualModeBanner>
+          La IA no pudo generar preguntas válidas. Escríbelas tú con «Agregar pregunta» y publica cuando estés
+          listo.
+        </ManualModeBanner>
+      )}
+
       {questions.length === 0 ? (
         <EmptyState
-          title="No quedan preguntas"
-          description="Eliminaste todas las preguntas. Vuelve a generar el cuestionario desde Cuestionarios."
+          title="Aún no hay preguntas"
+          description={
+            published
+              ? "Este cuestionario no tiene preguntas."
+              : "Agrega la primera pregunta con el botón de abajo."
+          }
         />
       ) : (
         <div className="space-y-4">
@@ -258,10 +388,31 @@ function Editor({ quiz: initial }: { quiz: Quiz }) {
               onChange={(next) =>
                 setQuestions((current) => current.map((item) => (item.id === next.id ? next : item)))
               }
-              onDelete={() => setQuestions((current) => current.filter((item) => item.id !== question.id))}
-              onRegenerate={() => void regenerate(question)}
+              onReject={() => void setQuestionStatus(question, "REJECTED")}
+              onApprove={() => void setQuestionStatus(question, "APPROVED")}
             />
           ))}
+        </div>
+      )}
+
+      {!published && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <Select
+            label="Tipo de pregunta"
+            value={newType}
+            onChange={(event) => setNewType(event.target.value as QuestionType)}
+            className="sm:w-56"
+          >
+            {(Object.keys(TYPE_LABEL) as QuestionType[]).map((type) => (
+              <option key={type} value={type}>
+                {TYPE_LABEL[type]}
+              </option>
+            ))}
+          </Select>
+          <Button variant="secondary" onClick={addQuestion}>
+            <PlusIcon />
+            Agregar pregunta
+          </Button>
         </div>
       )}
 
@@ -274,8 +425,7 @@ function Editor({ quiz: initial }: { quiz: Quiz }) {
               </span>
             ) : (
               <>
-                <span className="font-mono font-semibold text-stone-900">{questions.length}</span> preguntas en el
-                borrador
+                <span className="font-mono font-semibold text-stone-900">{active}</span> preguntas en el borrador
               </>
             )}
           </p>
@@ -283,7 +433,7 @@ function Editor({ quiz: initial }: { quiz: Quiz }) {
             <Button variant="secondary" onClick={() => void onSave()} loading={saving} disabled={publishing}>
               Guardar borrador
             </Button>
-            <Button onClick={() => void onPublish()} loading={publishing} disabled={saving || questions.length === 0}>
+            <Button onClick={() => void onPublish()} loading={publishing} disabled={saving || active === 0}>
               Aprobar y publicar
             </Button>
           </div>
@@ -294,7 +444,19 @@ function Editor({ quiz: initial }: { quiz: Quiz }) {
 }
 
 export function QuizEditor({ quizId }: { quizId: string }) {
-  const { data, error, loading, reload } = useApiQuery<Quiz>(`/quizzes/${quizId}`);
+  const { data, error, loading, reload, fetching } = useApiQuery<QuizView>(`/quizzes/${quizId}`);
+  const delay = useRef(POLL_START_MS);
+  const status = data?.status;
+
+  // Poll with backoff while the AI is generating (API_CONTRATO §5.1).
+  useEffect(() => {
+    if (status !== "GENERATING") return;
+    const timer = setTimeout(() => {
+      delay.current = Math.min(delay.current * 1.5, POLL_MAX_MS);
+      reload();
+    }, delay.current);
+    return () => clearTimeout(timer);
+  }, [status, reload, fetching]);
 
   if (error !== null) {
     return (
@@ -314,5 +476,26 @@ export function QuizEditor({ quizId }: { quizId: string }) {
       </div>
     );
   }
-  return <Editor key={data.id} quiz={data} />;
+  if (data.status === "GENERATING") {
+    return (
+      <div className="max-w-4xl space-y-6">
+        <PageHeader back={{ href: "/cuestionarios", label: "Cuestionarios" }} title={data.title} />
+        <Card>
+          <div role="status" className="flex items-start gap-4">
+            <span
+              aria-hidden="true"
+              className="mt-0.5 size-5 shrink-0 animate-spin rounded-full border-2 border-stone-300 border-t-stone-900"
+            />
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-stone-900">Generando preguntas…</p>
+              <p className="text-[13px] leading-relaxed text-stone-600">
+                La IA prepara un borrador. Esto toma unos segundos; no cierres esta pantalla.
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+  return <Editor key={`${data.id}-${data.status}`} quiz={data} />;
 }

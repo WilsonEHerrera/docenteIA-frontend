@@ -10,18 +10,59 @@ import { PlusIcon, SparkIcon, TrashIcon } from "@/components/ui/icons";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
 import { apiFetch } from "@/lib/api/client";
-import { errorMessage } from "@/lib/api/errors";
-import type { RubricCriterionInput } from "@/types/todo-api";
+import { ApiError, errorMessage } from "@/lib/api/errors";
+import type { CourseDetail, RubricCriterionPayload, SubmissionsResult } from "@/types/api";
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const ALLOWED = /\.(pdf|docx?|txt)$/i;
+// The backend only receives text already extracted (API_CONTRATO §6.11, D24): PDF/DOCX are not read.
+const MAX_FILE_BYTES = 1024 * 1024;
+const MAX_TEXT_CHARS = 20_000;
+const MAX_ITEMS = 100;
+const ALLOWED = /\.txt$/i;
 
-interface UploadResult {
-  accepted: number;
-  rejected: Array<{ name: string; reason: string }>;
+interface RubricCriterionInput {
+  name: string;
+  weightPct: string;
 }
 
-export function UploadPanel({ activityId, onUploaded }: { activityId: string; onUploaded: () => void }) {
+interface Rejection {
+  name: string;
+  reason: string;
+}
+
+// The UI defines criteria and weights only; every criterion gets the same four performance levels
+// (the contract needs 2–6 levels per criterion with a score from "0" to "5").
+const DEFAULT_LEVELS: RubricCriterionPayload["levels"] = [
+  { name: "Excelente", score: "5" },
+  { name: "Bueno", score: "4" },
+  { name: "Aceptable", score: "3" },
+  { name: "Insuficiente", score: "1" },
+];
+
+const REJECT_REASONS: Record<string, string> = {
+  DUPLICATE: "Ya hay otra entrega de este estudiante en el envío.",
+  STUDENT_NOT_ENROLLED: "El estudiante no está matriculado en el curso.",
+  EMPTY_TEXT: "El archivo no tiene texto.",
+  ALREADY_PROCESSING: "Ya tiene una entrega en proceso.",
+  ALREADY_GRADED: "Ya tiene nota para esta actividad.",
+};
+
+/** Lower-case, accent-free, single-spaced: lets "e003", "Ana Pérez" and "ana_perez" match. */
+function normalize(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+interface UploadPanelProps {
+  activityId: string;
+  courseId: string;
+  onUploaded: () => void;
+}
+
+export function UploadPanel({ activityId, courseId, onUploaded }: UploadPanelProps) {
   const toast = useToast();
   const [criteria, setCriteria] = useState<RubricCriterionInput[]>([
     { name: "Comprensión del concepto", weightPct: "40" },
@@ -30,7 +71,7 @@ export function UploadPanel({ activityId, onUploaded }: { activityId: string; on
   ]);
   const [files, setFiles] = useState<File[]>([]);
   const [problems, setProblems] = useState<string[]>([]);
-  const [rejected, setRejected] = useState<UploadResult["rejected"]>([]);
+  const [rejected, setRejected] = useState<Rejection[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const total = criteria.reduce((sum, item) => sum + (Number(item.weightPct) || 0), 0);
@@ -46,11 +87,11 @@ export function UploadPanel({ activityId, onUploaded }: { activityId: string; on
     const issues: string[] = [];
     const valid = picked.filter((file) => {
       if (!ALLOWED.test(file.name)) {
-        issues.push(`${file.name}: formato no admitido (usa PDF, DOC, DOCX o TXT).`);
+        issues.push(`${file.name}: formato no admitido. Por ahora solo se leen archivos de texto (.txt).`);
         return false;
       }
       if (file.size > MAX_FILE_BYTES) {
-        issues.push(`${file.name}: pesa más de 10 MB.`);
+        issues.push(`${file.name}: pesa más de 1 MB.`);
         return false;
       }
       return true;
@@ -65,21 +106,75 @@ export function UploadPanel({ activityId, onUploaded }: { activityId: string; on
     if (criteria.some((item) => item.name.trim() === "")) issues.push("Cada criterio necesita un nombre.");
     if (!totalOk) issues.push(`Los pesos de la rúbrica suman ${total} %; deben sumar 100 %.`);
     if (files.length === 0) issues.push("Agrega al menos una entrega.");
+    if (files.length > MAX_ITEMS) issues.push(`Envía máximo ${MAX_ITEMS} entregas por vez.`);
+    if (!courseId) issues.push("Abre la actividad desde Entregas para saber a qué curso pertenece.");
     setProblems(issues);
     if (issues.length > 0) return;
 
     setSubmitting(true);
     try {
-      await apiFetch(`/activities/${activityId}/rubric`, { method: "POST", body: { criteria } });
-      const form = new FormData();
-      files.forEach((file) => form.append("files", file));
-      const result = await apiFetch<UploadResult>(`/activities/${activityId}/submissions`, {
-        method: "POST",
-        body: form,
+      // Each file is matched to an enrolled student by its name (student code or full name).
+      const detail = await apiFetch<CourseDetail>(`/courses/${courseId}`);
+      const byKey = new Map<string, { id: string; fullName: string }>();
+      detail.students.forEach((student) => {
+        byKey.set(normalize(student.code), student);
+        byKey.set(normalize(student.fullName), student);
       });
-      setRejected(result.rejected);
+      const names = new Map(detail.students.map((student) => [student.id, student.fullName]));
+
+      const skipped: Rejection[] = [];
+      const items: Array<{ studentId: string; text: string }> = [];
+      for (const file of files) {
+        const student = byKey.get(normalize(file.name.replace(/\.[^.]+$/, "")));
+        if (!student) {
+          skipped.push({ name: file.name, reason: "El nombre no coincide con el código ni el nombre de un estudiante." });
+          continue;
+        }
+        const text = (await file.text()).trim();
+        if (text === "") {
+          skipped.push({ name: file.name, reason: REJECT_REASONS.EMPTY_TEXT });
+        } else if (text.length > MAX_TEXT_CHARS) {
+          skipped.push({ name: file.name, reason: `El texto supera ${MAX_TEXT_CHARS} caracteres.` });
+        } else {
+          items.push({ studentId: student.id, text });
+        }
+      }
+
+      let accepted = 0;
+      let backendRejected: Rejection[] = [];
+      if (items.length > 0) {
+        try {
+          await apiFetch(`/activities/${activityId}/rubric`, {
+            method: "POST",
+            body: {
+              criteria: criteria.map((item) => ({
+                name: item.name.trim(),
+                weightPct: String(Number(item.weightPct)),
+                levels: DEFAULT_LEVELS,
+              })),
+            },
+          });
+        } catch (error) {
+          // A rubric that already has entregas cannot change; keep using it.
+          if (!(error instanceof ApiError && error.code === "RUBRIC_IN_USE")) throw error;
+          toast.show("Esta actividad ya tiene entregas: se usó la rúbrica registrada.", "info");
+        }
+        const result = await apiFetch<SubmissionsResult>(`/activities/${activityId}/submissions`, {
+          method: "POST",
+          body: { items },
+        });
+        accepted = result.accepted;
+        backendRejected = result.rejected.map((item) => ({
+          name: names.get(item.studentId) ?? item.studentId,
+          reason: REJECT_REASONS[item.reason] ?? item.reason,
+        }));
+      }
+
+      setRejected([...skipped, ...backendRejected]);
       setFiles([]);
-      toast.show(`${result.accepted} entrega(s) recibidas. La IA está preparando las sugerencias.`, "success");
+      if (accepted > 0) {
+        toast.show(`${accepted} entrega(s) recibidas. La IA está preparando las sugerencias.`, "success");
+      }
       onUploaded();
     } catch (error) {
       setProblems([errorMessage(error)]);
@@ -151,8 +246,8 @@ export function UploadPanel({ activityId, onUploaded }: { activityId: string; on
 
         <FileInput
           label="Entregas de los estudiantes"
-          hint="PDF, DOC, DOCX o TXT; máximo 10 MB por archivo."
-          accept=".pdf,.doc,.docx,.txt"
+          hint="Archivos .txt, uno por estudiante, nombrados con su código (E003.txt) o su nombre; máximo 1 MB."
+          accept=".txt"
           multiple
           onChange={onFiles}
         >

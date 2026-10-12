@@ -44,7 +44,7 @@ export function AttendanceGrid({ records, readOnly, busyIds, onMark }: Attendanc
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-stone-900">{record.studentName}</p>
-                <p className="truncate font-mono text-[11px] text-stone-500">{record.studentId}</p>
+                <p className="truncate font-mono text-[11px] text-stone-500">{record.studentCode}</p>
               </div>
               {record.source === "MANUAL" && record.status !== "UNRECOGNIZED" ? (
                 <span className="font-mono text-[10px] font-medium tracking-wide text-stone-500 uppercase" title="Marcado por ti">
@@ -57,7 +57,9 @@ export function AttendanceGrid({ records, readOnly, busyIds, onMark }: Attendanc
 
             {unrecognized && !readOnly && (
               <p className="text-xs leading-relaxed text-amber-900">
-                La IA no pudo identificarlo en la foto. Indica si está presente o ausente.
+                {record.source === "MANUAL"
+                  ? "No fue considerado por la IA (sin consentimiento o referencia facial). Márcalo a mano."
+                  : "La IA no pudo identificarlo en la foto. Indica si está presente o ausente."}
               </p>
             )}
 

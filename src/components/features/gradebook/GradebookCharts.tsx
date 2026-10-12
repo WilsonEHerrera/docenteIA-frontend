@@ -8,7 +8,10 @@ import type { GradebookRow } from "@/types/api";
 const SCALE_MAX = 5;
 
 export function GradebookCharts({ rows }: { rows: GradebookRow[] }) {
-  const values = rows.map((row) => ({ row, value: Number(row.average) }));
+  // Students with no graded work yet (average null) have nothing to chart.
+  const values = rows.flatMap((row) =>
+    row.average === null ? [] : [{ row, value: Number(row.average) }],
+  );
   const buckets = [
     { label: "Menos de 3.0", count: values.filter((v) => v.value < 3).length, danger: true },
     { label: "3.0 a 3.9", count: values.filter((v) => v.value >= 3 && v.value < 4).length, danger: false },

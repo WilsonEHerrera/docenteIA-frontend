@@ -15,18 +15,14 @@ import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { apiFetch } from "@/lib/api/client";
-import { ApiError, errorMessage, isServiceUnavailable } from "@/lib/api/errors";
+import { errorMessage, isServiceUnavailable } from "@/lib/api/errors";
 import { cn } from "@/lib/cn";
-import type { AttendanceSession, Course, Paginated } from "@/types/api";
+import type { AttendanceSession, Course, CourseDetail, Paginated } from "@/types/api";
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
-// TODO(api): the contract does not define this error code.
-const CONSENT_CODE = "BIOMETRIC_CONSENT_MISSING";
+const PHOTO_TYPES = ["image/jpeg", "image/png"];
 
-type Problem =
-  | { kind: "service-down" }
-  | { kind: "no-consent"; message: string }
-  | { kind: "error"; message: string };
+type Problem = { kind: "service-down" } | { kind: "error"; message: string };
 
 const pickerClass =
   "flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-stone-900 sm:h-11";
@@ -65,8 +61,8 @@ export function CourseCapture() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setPhotoError("El archivo debe ser una imagen (JPG, PNG o HEIC).");
+    if (!PHOTO_TYPES.includes(file.type)) {
+      setPhotoError("La foto debe ser un JPG o PNG.");
       return;
     }
     if (file.size > MAX_PHOTO_BYTES) {
@@ -83,19 +79,16 @@ export function CourseCapture() {
     setSubmitting(true);
     setProblem(null);
     try {
-      const form = new FormData();
-      form.set("courseId", courseId);
-      form.set("photo", photo);
+      // The photo travels as the raw body (API_CONTRATO §1, §6.13); the date defaults to today.
       const session = await apiFetch<AttendanceSession>("/attendance/sessions", {
         method: "POST",
-        body: form,
+        query: { courseId },
+        body: photo,
       });
       router.push(`/asistencia/${session.id}`);
     } catch (error) {
       if (isServiceUnavailable(error)) setProblem({ kind: "service-down" });
-      else if (error instanceof ApiError && error.code === CONSENT_CODE) {
-        setProblem({ kind: "no-consent", message: error.message });
-      } else setProblem({ kind: "error", message: errorMessage(error) });
+      else setProblem({ kind: "error", message: errorMessage(error) });
       setSubmitting(false);
     }
   }
@@ -104,10 +97,15 @@ export function CourseCapture() {
     if (!courseId) return;
     setManualLoading(true);
     try {
-      // TODO(api): the contract expects records[]; the backend should seed all enrolled students.
+      // The contract needs every enrolled student exactly once (API_CONTRATO §6.9). They start as
+      // PRESENT so nobody is marked absent without the teacher deciding; the teacher then corrects.
+      const detail = await apiFetch<CourseDetail>(`/courses/${courseId}`);
       const session = await apiFetch<AttendanceSession>("/attendance/sessions/manual", {
         method: "POST",
-        body: { courseId, records: [] },
+        body: {
+          courseId,
+          records: detail.students.map((student) => ({ studentId: student.id, status: "PRESENT" })),
+        },
       });
       router.push(`/asistencia/${session.id}`);
     } catch (error) {
@@ -178,31 +176,26 @@ export function CourseCapture() {
                     <label className={cn(pickerClass, "bg-stone-900 text-white shadow-xs hover:bg-stone-800")}>
                       <CameraIcon width={18} height={18} />
                       {photo ? "Tomar otra foto" : "Tomar foto"}
-                      <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={onPhoto} />
+                      <input type="file" accept="image/jpeg,image/png" capture="environment" className="sr-only" onChange={onPhoto} />
                     </label>
                     <label
                       className={cn(pickerClass, "border border-stone-200 bg-white text-stone-800 shadow-xs hover:bg-stone-50")}
                     >
                       <UploadIcon width={18} height={18} />
                       Subir desde galería
-                      <input type="file" accept="image/*" className="sr-only" onChange={onPhoto} />
+                      <input type="file" accept="image/jpeg,image/png" className="sr-only" onChange={onPhoto} />
                     </label>
                   </div>
                   <FieldMessage
                     id="attendance-photo"
                     error={photoError ?? undefined}
-                    hint={photo ? photo.name : "JPG, PNG o HEIC; máximo 10 MB."}
+                    hint={photo ? photo.name : "JPG o PNG; máximo 10 MB."}
                   />
                 </Step>
 
                 {problem?.kind === "service-down" && (
                   <ManualModeBanner onContinue={continueManual} loading={manualLoading}>
                     No pudimos procesar la foto ahora. Puedes marcar la asistencia a mano sin perder tu avance.
-                  </ManualModeBanner>
-                )}
-                {problem?.kind === "no-consent" && (
-                  <ManualModeBanner title="Hay estudiantes sin consentimiento" onContinue={continueManual} loading={manualLoading}>
-                    {problem.message}
                   </ManualModeBanner>
                 )}
                 {problem?.kind === "error" && <ErrorState error={new Error(problem.message)} />}

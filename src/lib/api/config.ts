@@ -34,6 +34,15 @@ const READY_ENDPOINTS: RegExp[] = [
   /^\/courses\/[^/]+\/(schedules|enrollments)$/,
   /^\/students$/,
   /^\/audit$/,
+  /^\/attendance\/sessions(\/|$)/,
+  /^\/courses\/[^/]+\/(gradebook|activities|quizzes|attendance\/(sessions|summary)|consents)$/,
+  /^\/activities\/[^/]+(\/(rubric|submissions|suggestions))?$/,
+  /^\/grades\/[^/]+$/,
+  /^\/submissions\/[^/]+\/suggestion$/,
+  /^\/suggestions\/[^/]+\/(approve|edit|reject)$/,
+  /^\/quizzes(\/|$)/,
+  /^\/reports\//,
+  /^\/ai\/metrics$/,
   /^\/health\//,
 ];
 
@@ -42,9 +51,3 @@ export function shouldMock(path: string): boolean {
   if (!MOCK_PLANNED_ENDPOINTS) return false;
   return !READY_ENDPOINTS.some((pattern) => pattern.test(path));
 }
-
-/** Forces an attendance demo scenario on every new photo session (mock only). */
-export const MOCK_ATTENDANCE_SCENARIO = process.env.NEXT_PUBLIC_MOCK_SCENARIO as
-  | "ai-down"
-  | "no-consent"
-  | undefined;

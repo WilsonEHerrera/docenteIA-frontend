@@ -28,7 +28,7 @@ import { useTodaySchedule } from "@/hooks/useTodaySchedule";
 import { useAuth } from "@/providers/AuthProvider";
 import { EducationQuote } from "./EducationQuote";
 import type { Course, Paginated } from "@/types/api";
-import type { DashboardSummary } from "@/types/todo-api";
+import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 
 const today = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long" });
 
@@ -95,8 +95,7 @@ export function HomeScreen() {
   const role = user?.role;
   const schedule = useTodaySchedule();
   const courses = useApiQuery<Paginated<Course>>("/courses", { limit: 100 });
-  // TODO(api): GET /dashboard is not in docs/API_CONTRATO.md (still mocked).
-  const dashboard = useApiQuery<DashboardSummary>("/dashboard");
+  const dashboard = useDashboardSummary(role);
 
   const firstName = user?.fullName.split(" ")[0] ?? "";
   const date = today.format(new Date());

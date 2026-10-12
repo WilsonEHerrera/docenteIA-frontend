@@ -16,9 +16,12 @@ export class ApiError extends Error {
   }
 }
 
-/** 503 means the AI/external service is down: show ManualModeBanner and the manual flow. */
+/**
+ * 503 means the AI/external service is down and 429 AI_DAILY_LIMIT that the daily quota is spent
+ * (API_CONTRATO §1, §6.1): show ManualModeBanner and the manual flow.
+ */
 export function isServiceUnavailable(error: unknown): boolean {
-  return error instanceof ApiError && error.statusCode === 503;
+  return error instanceof ApiError && (error.statusCode === 503 || error.code === "AI_DAILY_LIMIT");
 }
 
 export function isUnauthorized(error: unknown): boolean {
@@ -90,6 +93,29 @@ const MESSAGES: Record<string, string> = {
   EMPTY_CSV: "El archivo CSV no tiene filas de datos.",
   INVALID_CSV_HEADER: "La primera fila debe ser: course,studentCode,fullName,email.",
   CSV_TOO_LARGE: "El archivo supera el límite de 2000 filas o 1 MB. Divídelo en partes.",
+  INVALID_IMAGE: "La foto debe ser un JPG o PNG válido. Toma otra e inténtalo de nuevo.",
+  IMAGE_REQUIRED: "Agrega la foto del grupo antes de enviar.",
+  INVALID_DATE: "La fecha no es válida.",
+  FUTURE_DATE: "No se puede registrar asistencia de una fecha futura.",
+  INVALID_RANGE: "La fecha «Desde» debe ser anterior o igual a «Hasta».",
+  SESSION_CONFIRMED: "Esta asistencia ya fue confirmada y no se puede modificar.",
+  UNRESOLVED_RECORDS: "Aún hay estudiantes sin definir. Márcalos como presentes o ausentes antes de confirmar.",
+  INCOMPLETE_RECORDS: "Faltan estudiantes de la matrícula en la lista de asistencia.",
+  INVALID_GRADE: "La nota debe estar entre 0.00 y 5.00.",
+  RUBRIC_REQUIRED: "Esta actividad aún no tiene rúbrica. Defínela antes de subir entregas.",
+  RUBRIC_IN_USE: "La rúbrica ya tiene entregas y no se puede modificar.",
+  DUPLICATE_CRITERION: "Hay dos criterios con el mismo nombre. Usa nombres distintos.",
+  SUGGESTION_ALREADY_DECIDED: "Esta sugerencia ya fue resuelta. Actualiza la lista.",
+  NO_SUGGESTED_SCORE: "La IA no propuso una nota. Califica a mano esta entrega.",
+  SOURCE_REQUIRED: "Escribe un tema o adjunta un texto de referencia.",
+  INVALID_QUESTION: "La pregunta no cumple el formato: revisa el enunciado, las opciones y la respuesta correcta.",
+  QUIZ_GENERATING: "El cuestionario aún se está generando. Espera a que termine.",
+  QUIZ_PUBLISHED: "El cuestionario ya está publicado y no se puede modificar.",
+  PENDING_QUESTIONS: "Quedan preguntas por decidir. Apruébalas o descártalas antes de publicar.",
+  NO_APPROVED_QUESTIONS: "Aprueba al menos una pregunta antes de publicar.",
+  AI_UNAVAILABLE: "La IA no está disponible ahora. Puedes continuar en modo manual.",
+  AI_DAILY_LIMIT: "Se agotó la cuota diaria de IA de la institución. Continúa en modo manual.",
+  WEIGHTS_EXCEED_100: "Los porcentajes del periodo sumarían más de 100 %.",
 };
 
 export function isLocked(error: unknown): boolean {

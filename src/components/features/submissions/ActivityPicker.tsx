@@ -18,14 +18,12 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Select } from "@/components/ui/Select";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useApiQuery } from "@/hooks/useApiQuery";
-import type { Activity, Course, GradebookRow, Paginated } from "@/types/api";
+import type { Course, GradebookView, Paginated } from "@/types/api";
 
 export function ActivityPicker() {
   const courses = useApiQuery<Paginated<Course>>("/courses", { limit: 100 });
   const [courseId, setCourseId] = useState("");
-  const gradebook = useApiQuery<{ activities: Activity[]; rows: GradebookRow[] }>(
-    courseId ? `/courses/${courseId}/gradebook` : null,
-  );
+  const gradebook = useApiQuery<GradebookView>(courseId ? `/courses/${courseId}/gradebook` : null);
   const course = courses.data?.data.find((item) => item.id === courseId);
 
   return (
@@ -113,7 +111,7 @@ export function ActivityPicker() {
                 {gradebook.data.activities.map((activity) => (
                   <li key={activity.id}>
                     <Link
-                      href={`/entregas/${activity.id}?name=${encodeURIComponent(activity.name)}`}
+                      href={`/entregas/${activity.id}?name=${encodeURIComponent(activity.name)}&course=${encodeURIComponent(courseId)}`}
                       className="group flex min-h-14 items-center gap-3 px-3 py-3 transition-colors hover:bg-stone-50 sm:px-4"
                     >
                       <FileCheckIcon className="shrink-0 text-stone-400" />

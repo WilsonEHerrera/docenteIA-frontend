@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { ManualModeBanner } from "@/components/ai/ManualModeBanner";
 import { AiBadge } from "@/components/ai/OriginTag";
 import { Alert } from "@/components/ui/Alert";
@@ -22,16 +22,65 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useApiQuery } from "@/hooks/useApiQuery";
 import { apiFetch } from "@/lib/api/client";
 import { errorMessage, isServiceUnavailable } from "@/lib/api/errors";
-import type { Course, Paginated } from "@/types/api";
-import type { Quiz } from "@/types/todo-api";
+import type { Course, Paginated, QuizSummaryView, QuizView } from "@/types/api";
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
+// Only the extracted text is sent to the backend (API_CONTRATO §6.14, D24): PDF/DOCX are not read.
+const MAX_FILE_BYTES = 1024 * 1024;
+const MAX_SOURCE_CHARS = 20_000;
+
+type QuizRow = QuizSummaryView & { courseId: string };
+
+/** There is no global quiz list: GET /courses/:id/quizzes is called once per course. */
+function useQuizzes(ids: string[] | null) {
+  const courseIds = ids ?? [];
+  const [token, setToken] = useState(0);
+  const [result, setResult] = useState<{ key: string; rows: QuizRow[]; error: unknown } | null>(null);
+  const key = `${courseIds.join(",")}|${token}`;
+
+  useEffect(() => {
+    if (courseIds.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pages = await Promise.all(
+          courseIds.map(async (id) => {
+            const page = await apiFetch<Paginated<QuizSummaryView>>(`/courses/${id}/quizzes`, {
+              query: { limit: 100 },
+            });
+            return page.data.map((quiz) => ({ ...quiz, courseId: id }));
+          }),
+        );
+        const rows = pages
+          .flat()
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        if (!cancelled) setResult({ key, rows, error: null });
+      } catch (error) {
+        if (!cancelled) setResult({ key, rows: [], error });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // `key` already encodes courseIds and the reload counter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  const reload = useCallback(() => setToken((value) => value + 1), []);
+  const current = result?.key === key ? result : null;
+  // `ids === null`: the course list is still loading. An empty list means no courses, so no quizzes.
+  const empty = ids !== null && courseIds.length === 0;
+  return {
+    data: empty ? ([] as QuizRow[]) : ids === null ? null : (current?.rows ?? null),
+    error: empty || ids === null ? null : (current?.error ?? null),
+    loading: !empty && (ids === null || current === null),
+    reload,
+  };
+}
 
 export function QuizHome() {
   const router = useRouter();
   const courses = useApiQuery<Paginated<Course>>("/courses", { limit: 100 });
-  // TODO(api): GET /quizzes (list) is not in the contract.
-  const quizzes = useApiQuery<Quiz[]>("/quizzes");
+  const quizzes = useQuizzes(courses.data ? courses.data.data.map((course) => course.id) : null);
   const [courseId, setCourseId] = useState("");
   const [topic, setTopic] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -43,12 +92,12 @@ export function QuizHome() {
     const picked = event.target.files?.[0] ?? null;
     event.target.value = "";
     if (!picked) return;
-    if (!/\.(pdf|docx?|txt)$/i.test(picked.name)) {
-      setFormError("El documento debe ser PDF, DOC, DOCX o TXT.");
+    if (!/\.txt$/i.test(picked.name)) {
+      setFormError("Por ahora solo se leen documentos de texto (.txt).");
       return;
     }
     if (picked.size > MAX_FILE_BYTES) {
-      setFormError("El documento pesa más de 10 MB.");
+      setFormError("El documento pesa más de 1 MB.");
       return;
     }
     setFormError(null);
@@ -63,11 +112,25 @@ export function QuizHome() {
     setAiDown(false);
     setGenerating(true);
     try {
-      const form = new FormData();
-      form.set("courseId", courseId);
-      if (topic.trim()) form.set("topic", topic.trim());
-      if (file) form.set("file", file);
-      const quiz = await apiFetch<Quiz>("/quizzes/generate", { method: "POST", body: form });
+      const sourceText = file ? (await file.text()).trim() : "";
+      if (file && sourceText === "") {
+        setFormError("El documento no tiene texto.");
+        setGenerating(false);
+        return;
+      }
+      if (sourceText.length > MAX_SOURCE_CHARS) {
+        setFormError(`El documento supera los ${MAX_SOURCE_CHARS} caracteres. Usa un fragmento más corto.`);
+        setGenerating(false);
+        return;
+      }
+      const quiz = await apiFetch<QuizView>("/quizzes/generate", {
+        method: "POST",
+        body: {
+          courseId,
+          ...(topic.trim() ? { topic: topic.trim() } : {}),
+          ...(sourceText ? { sourceText } : {}),
+        },
+      });
       router.push(`/cuestionarios/${quiz.id}`);
     } catch (error) {
       if (isServiceUnavailable(error)) setAiDown(true);
@@ -117,8 +180,8 @@ export function QuizHome() {
             </div>
             <FileInput
               label="O un documento de referencia (opcional)"
-              hint="PDF, DOC, DOCX o TXT; máximo 10 MB."
-              accept=".pdf,.doc,.docx,.txt"
+              hint="Archivo de texto (.txt); máximo 1 MB."
+              accept=".txt"
               onChange={onFile}
             >
               {file && <FileChip name={file.name} onRemove={() => setFile(null)} />}
@@ -174,7 +237,7 @@ export function QuizHome() {
                       <span className="min-w-0 flex-1 basis-full sm:basis-auto">
                         <span className="block truncate text-sm font-semibold text-stone-900">{quiz.title}</span>
                         <span className="block truncate text-xs text-stone-600">
-                          {courseName(quiz.courseId)} · <span className="font-mono">{quiz.questions.length}</span> preguntas
+                          {courseName(quiz.courseId)} · <span className="font-mono">{quiz.questionCount}</span> preguntas
                         </span>
                       </span>
                       {quiz.status === "PUBLISHED" ? (
@@ -182,6 +245,10 @@ export function QuizHome() {
                           <CheckIcon />
                           Publicado
                         </Badge>
+                      ) : quiz.status === "GENERATING" ? (
+                        <Badge variant="info">Generando</Badge>
+                      ) : quiz.status === "MANUAL_REQUIRED" ? (
+                        <Badge variant="warning">Modo manual</Badge>
                       ) : (
                         <AiBadge />
                       )}

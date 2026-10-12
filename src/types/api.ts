@@ -91,6 +91,7 @@ export interface AuditLogView {
 export interface AttendanceRecord {
   id: string;
   studentId: string;
+  studentCode: string;
   studentName: string;
   status: AttendanceStatus;
   source: AttendanceSource;
@@ -102,8 +103,29 @@ export interface AttendanceSession {
   courseId: string;
   date: string;
   status: SessionStatus;
+  confirmedAt: string | null;
+  facesNotMatched: number | null;
   records: AttendanceRecord[];
-  stats: { recognized: number; unrecognized: number };
+  stats: { present: number; absent: number; excused: number; unrecognized: number };
+}
+
+// API_CONTRATO §6.9
+export interface AttendanceSummaryRow {
+  studentId: string;
+  studentCode: string;
+  studentName: string;
+  absences: number;
+  excused: number;
+  maxAbsences: number;
+  usagePct: number;
+  alert: boolean;
+}
+
+export interface AttendanceSummary {
+  maxAbsences: number;
+  alertThresholdPct: number;
+  confirmedSessions: number;
+  rows: AttendanceSummaryRow[];
 }
 
 export interface Activity {
@@ -117,6 +139,7 @@ export interface Activity {
 export interface CriterionResult {
   criterionId: string;
   criterionName: string;
+  weightPct: string;
   level: string;
   score: string;
   justification: string;
@@ -138,11 +161,127 @@ export interface AiSuggestion {
 
 export interface GradebookRow {
   studentId: string;
+  studentCode: string;
   studentName: string;
   grades: Record<string, string | null>;
-  average: string;
+  gradeIds: Record<string, string>;
+  average: string | null;
+  isFinal: boolean;
+  gradedWeightPct: string;
   absences: number;
+  absenceAlert: boolean;
   atRisk: boolean;
+}
+
+// API_CONTRATO §6.8
+export interface GradebookView {
+  period: string;
+  weightsTotal: string;
+  weightsComplete: boolean;
+  activities: Activity[];
+  rows: GradebookRow[];
+}
+
+// API_CONTRATO §6.11
+export interface RubricCriterionPayload {
+  name: string;
+  weightPct: string;
+  levels: Array<{ name: string; score: string }>;
+}
+
+export interface SubmissionView {
+  id: string;
+  studentId: string;
+  studentCode: string;
+  studentName: string;
+  status: "PROCESSING" | "SUGGESTED" | "MANUAL_REQUIRED";
+  updatedAt: string;
+  suggestionId: string | null;
+  suggestionStatus: SuggestionStatus | null;
+}
+
+export interface SubmissionsResult {
+  accepted: number;
+  rejected: Array<{ studentId: string; reason: string }>;
+}
+
+// API_CONTRATO §6.14
+export type QuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE" | "OPEN";
+export type QuizStatus = "GENERATING" | "DRAFT" | "MANUAL_REQUIRED" | "PUBLISHED";
+
+export interface QuestionView {
+  id: string;
+  position: number;
+  type: QuestionType;
+  prompt: string;
+  options: string[];
+  correctIndex: number | null;
+  explanation: string;
+  status: SuggestionStatus;
+}
+
+export interface QuizView {
+  id: string;
+  courseId: string;
+  title: string;
+  topic: string | null;
+  status: QuizStatus;
+  provider: string | null;
+  promptVersion: string | null;
+  createdAt: string;
+  publishedAt: string | null;
+  questions: QuestionView[];
+}
+
+export interface QuizSummaryView {
+  id: string;
+  title: string;
+  status: QuizStatus;
+  questionCount: number;
+  approvedCount: number;
+  pendingCount: number;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+// API_CONTRATO §6.10
+export interface PerformanceReport {
+  course: { id: string; name: string };
+  period: string;
+  weightsTotal: string;
+  weightsComplete: boolean;
+  studentCount: number;
+  gradedStudents: number;
+  courseAverage: string | null;
+  belowPassing: number;
+  absenceAlerts: number;
+  atRiskCount: number;
+  activities: Array<{ id: string; name: string; weightPct: string; gradedCount: number; average: string | null }>;
+  atRiskStudents: Array<{
+    studentId: string;
+    studentCode: string;
+    studentName: string;
+    average: string | null;
+    absences: number;
+    absenceAlert: boolean;
+  }>;
+}
+
+export interface AttendanceReport {
+  course: { id: string; name: string };
+  from: string | null;
+  to: string | null;
+  confirmedSessions: number;
+  overallAttendancePct: string | null;
+  rows: Array<{
+    studentId: string;
+    studentCode: string;
+    studentName: string;
+    present: number;
+    absent: number;
+    excused: number;
+    attendancePct: string | null;
+  }>;
 }
 
 export interface Notification {

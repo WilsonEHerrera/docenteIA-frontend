@@ -92,7 +92,9 @@ export function SessionView({ sessionId }: { sessionId: string }) {
           ...current,
           records,
           stats: {
-            recognized: records.filter((r) => r.status === "PRESENT" && r.source === "AI").length,
+            present: records.filter((r) => r.status === "PRESENT").length,
+            absent: records.filter((r) => r.status === "ABSENT").length,
+            excused: records.filter((r) => r.status === "EXCUSED").length,
             unrecognized: records.filter((r) => r.status === "UNRECOGNIZED").length,
           },
         };
